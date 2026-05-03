@@ -67,6 +67,13 @@ const state = {
     speedPreset: "60,60",
     buttonPressMs: 60,
     inputDelayMs: 60,
+    ditherMode: "fs",
+    ditherAmount: 100,
+    colorDistanceMode: "weighted",
+    brightness: 0,
+    contrast: 0,
+    saturation: 0,
+    resizeMode: "contain",
     dualPassCommands: {
       pass1: [],
       pass2: [],
@@ -162,6 +169,17 @@ const els = {
   speedCustomRow: document.getElementById("speed-custom-row"),
   speedPressInput: document.getElementById("speed-press-input"),
   speedDelayInput: document.getElementById("speed-delay-input"),
+  ditherModeSelect: document.getElementById("dither-mode-select"),
+  ditherAmountRange: document.getElementById("dither-amount-range"),
+  ditherAmountValue: document.getElementById("dither-amount-value"),
+  colorDistanceSelect: document.getElementById("color-distance-select"),
+  resizeModeSelect: document.getElementById("resize-mode-select"),
+  brightnessRange: document.getElementById("brightness-range"),
+  brightnessValue: document.getElementById("brightness-value"),
+  contrastRange: document.getElementById("contrast-range"),
+  contrastValue: document.getElementById("contrast-value"),
+  saturationRange: document.getElementById("saturation-range"),
+  saturationValue: document.getElementById("saturation-value"),
   thresholdLabel: document.getElementById("threshold-label"),
   thresholdRange: document.getElementById("threshold-range"),
   thresholdValue: document.getElementById("threshold-value"),
@@ -195,12 +213,20 @@ const els = {
   dualPass2PreviewImage: document.getElementById("dual-pass2-preview-image"),
   dualPass1PreviewMeta: document.getElementById("dual-pass1-preview-meta"),
   dualPass2PreviewMeta: document.getElementById("dual-pass2-preview-meta"),
+  scriptReplayRow: document.getElementById("script-replay-row"),
+  scriptReplayCanvas: document.getElementById("script-replay-canvas"),
+  scriptReplayMeta: document.getElementById("script-replay-meta"),
   officialPalettePanel: document.getElementById("official-palette-panel"),
   officialPaletteSummary: document.getElementById("official-palette-summary"),
   officialPaletteGrid: document.getElementById("official-palette-grid"),
   commandsOutput: document.getElementById("commands-output"),
   copyButton: document.getElementById("copy-button"),
   downloadButton: document.getElementById("download-button"),
+  dualPassScriptActions: document.getElementById("dual-pass-script-actions"),
+  copyPass1Button: document.getElementById("copy-pass1-button"),
+  downloadPass1Button: document.getElementById("download-pass1-button"),
+  copyPass2Button: document.getElementById("copy-pass2-button"),
+  downloadPass2Button: document.getElementById("download-pass2-button"),
   studioLogOutput: document.getElementById("log-output"),
   studioClearLogButton: document.getElementById("studio-clear-log-button"),
   statColors: document.getElementById("stat-colors"),
@@ -379,6 +405,45 @@ els.speedPressInput.addEventListener("change", () => {
 
 els.speedDelayInput.addEventListener("change", () => {
   setStudioInputDelayMs(els.speedDelayInput.value);
+});
+
+els.ditherModeSelect.addEventListener("change", () => {
+  state.studio.ditherMode = els.ditherModeSelect.value;
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.ditherAmountRange.addEventListener("input", () => {
+  state.studio.ditherAmount = normalizeStudioNumericValue(els.ditherAmountRange.value, state.studio.ditherAmount, {
+    min: 0,
+    max: 100,
+  });
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.colorDistanceSelect.addEventListener("change", () => {
+  state.studio.colorDistanceMode = els.colorDistanceSelect.value;
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.resizeModeSelect.addEventListener("change", () => {
+  state.studio.resizeMode = els.resizeModeSelect.value;
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.brightnessRange.addEventListener("input", () => {
+  setStudioAdjustment("brightness", els.brightnessRange.value);
+});
+
+els.contrastRange.addEventListener("input", () => {
+  setStudioAdjustment("contrast", els.contrastRange.value);
+});
+
+els.saturationRange.addEventListener("input", () => {
+  setStudioAdjustment("saturation", els.saturationRange.value);
 });
 
 els.autoRemoveBackgroundCheckbox.addEventListener("change", () => {
@@ -567,13 +632,19 @@ function buildStudioGeneratePayload() {
     imageOffsetYPercent: state.studio.imageOffsetYPercent,
     mode: state.studio.colorMode,
     colors: state.studio.colorCount,
-    resizeMode: "contain",
+    resizeMode: state.studio.resizeMode,
     threshold: Number(els.thresholdRange.value),
     previewScale: 12,
     removeBackground: state.studio.removeBackground,
     dualPass: state.studio.dualPass,
     buttonPressMs: state.studio.buttonPressMs,
     inputDelayMs: state.studio.inputDelayMs,
+    ditherMode: state.studio.ditherMode,
+    ditherAmount: state.studio.ditherAmount / 100,
+    colorDistanceMode: state.studio.colorDistanceMode,
+    brightness: state.studio.brightness,
+    contrast: state.studio.contrast,
+    saturation: state.studio.saturation,
   };
 }
 
@@ -621,6 +692,12 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.dualPass = payload.profile.dualPass === true;
   state.studio.buttonPressMs = payload.profile.buttonPressMs ?? state.studio.buttonPressMs;
   state.studio.inputDelayMs = payload.profile.inputDelayMs ?? state.studio.inputDelayMs;
+  state.studio.ditherMode = payload.profile.ditherMode ?? state.studio.ditherMode;
+  state.studio.ditherAmount = Math.round((payload.profile.ditherAmount ?? state.studio.ditherAmount / 100) * 100);
+  state.studio.colorDistanceMode = payload.profile.colorDistanceMode ?? state.studio.colorDistanceMode;
+  state.studio.brightness = payload.profile.brightness ?? state.studio.brightness;
+  state.studio.contrast = payload.profile.contrast ?? state.studio.contrast;
+  state.studio.saturation = payload.profile.saturation ?? state.studio.saturation;
   state.studio.dualPassCommands = {
     pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
     pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
@@ -640,6 +717,7 @@ function applyGeneratedStudioPayload(payload) {
     : String(payload.stats.commandCount);
   els.statRuntime.textContent = payload.stats.estimatedRuntimeLabel;
   renderDualPassPayload(payload);
+  renderScriptReplay();
   void updatePreviewBounds(payload);
   renderOfficialPalettePreview();
 }
@@ -668,6 +746,114 @@ function renderDualPassPayload(payload) {
     `粗绘 ${dual.pass1Stats.commandCount} 条命令 · ${dual.pass1Stats.estimatedRuntimeLabel}`;
   els.dualPass2PreviewMeta.textContent =
     `修正 ${dual.pass2Stats.commandCount} 条命令 · ${dual.pass2Stats.estimatedRuntimeLabel}`;
+}
+
+function officialPaletteRgb(index) {
+  const palette = state.studio.officialPalette;
+  const row = palette.grid[Math.floor(index / (palette.cols || 12))];
+  const hex = row?.[index % (palette.cols || 12)] ?? "#000000";
+  return hexToRgb(hex);
+}
+
+function hexToRgb(hex) {
+  const normalized = String(hex).replace("#", "");
+  return {
+    r: Number.parseInt(normalized.slice(0, 2), 16) || 0,
+    g: Number.parseInt(normalized.slice(2, 4), 16) || 0,
+    b: Number.parseInt(normalized.slice(4, 6), 16) || 0,
+  };
+}
+
+function renderScriptReplay() {
+  if (!state.commands.length || !els.scriptReplayCanvas) {
+    els.scriptReplayRow.classList.add("hidden");
+    return;
+  }
+
+  const canvas = els.scriptReplayCanvas;
+  canvas.width = state.studio.canvasSize;
+  canvas.height = state.studio.canvasSize;
+  const ctx = canvas.getContext("2d");
+
+  if (!ctx) {
+    return;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let drawn = 0;
+
+  if (state.studio.dualPass && state.studio.dualPassCommands.pass1.length > 0) {
+    drawn += runScriptOnReplayCanvas(ctx, state.studio.dualPassCommands.pass1, 3);
+    drawn += runScriptOnReplayCanvas(ctx, state.studio.dualPassCommands.pass2, 1);
+  } else {
+    drawn += runScriptOnReplayCanvas(ctx, state.commands, state.studio.brushSize);
+  }
+
+  els.scriptReplayRow.classList.remove("hidden");
+  els.scriptReplayMeta.textContent = `${drawn} 笔回放`;
+}
+
+function runScriptOnReplayCanvas(ctx, commands, brushSize) {
+  const slots = Array.from({ length: 9 }, (_, index) => index);
+  let currentSlot = 0;
+  let x = Math.floor(state.studio.canvasSize / 2);
+  let y = Math.floor(state.studio.canvasSize / 2);
+  let drawn = 0;
+  const halfBrush = Math.floor((brushSize - 1) / 2);
+
+  const stamp = () => {
+    const colorIndex = slots[currentSlot] ?? 0;
+    const rgb = state.studio.colorMode === "official" ? officialPaletteRgb(colorIndex) : { r: 0, g: 0, b: 0 };
+    ctx.fillStyle = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+
+    for (let dy = 0; dy < brushSize; dy += 1) {
+      for (let dx = 0; dx < brushSize; dx += 1) {
+        const px = x - halfBrush + dx;
+        const py = y - halfBrush + dy;
+
+        if (px >= 0 && py >= 0 && px < state.studio.canvasSize && py < state.studio.canvasSize) {
+          ctx.fillRect(px, py, 1, 1);
+        }
+      }
+    }
+
+    drawn += 1;
+  };
+
+  for (const rawCommand of commands) {
+    const command = String(rawCommand).trim();
+    const parts = command.split(/\s+/);
+
+    if (!command || command.startsWith("#") || parts[0] === "CFG") {
+      continue;
+    }
+
+    if (parts[0] === "M") {
+      x += Number(parts[1]) || 0;
+      y += Number(parts[2]) || 0;
+    } else if (parts[0] === "L") {
+      const dx = Number(parts[1]) || 0;
+      const dy = Number(parts[2]) || 0;
+      const steps = Math.abs(dx) + Math.abs(dy);
+      const sx = Math.sign(dx);
+      const sy = Math.sign(dy);
+      stamp();
+      for (let step = 0; step < steps; step += 1) {
+        x += sx;
+        y += sy;
+        stamp();
+      }
+    } else if (parts[0] === "P") {
+      stamp();
+    } else if (parts[0] === "C") {
+      currentSlot = Number(parts[1]) || 0;
+    } else if (parts[0] === "BC" && parts[1] !== "RESET") {
+      slots[Number(parts[1]) || 0] = (Number(parts[2]) || 0) * 12 + (Number(parts[3]) || 0);
+    }
+  }
+
+  return drawn;
 }
 
 function renderPreviewBounds(profile, imageBounds) {
@@ -884,6 +1070,48 @@ els.downloadButton.addEventListener("click", () => {
   link.click();
   URL.revokeObjectURL(url);
   appendLog(els.studioLogOutput, "脚本文件已下载。");
+});
+
+async function copyCommandsToClipboard(commands, label) {
+  if (!commands.length) {
+    return;
+  }
+
+  await navigator.clipboard.writeText(commands.join("\n"));
+  appendLog(els.studioLogOutput, `${label} 已复制到剪贴板。`);
+}
+
+function downloadCommands(commands, filename, label) {
+  if (!commands.length) {
+    return;
+  }
+
+  const blob = new Blob([`${commands.join("\n")}\n`], {
+    type: "text/plain;charset=utf-8",
+  });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+  appendLog(els.studioLogOutput, `${label} 已下载。`);
+}
+
+els.copyPass1Button.addEventListener("click", async () => {
+  await copyCommandsToClipboard(state.studio.dualPassCommands.pass1, "pass1");
+});
+
+els.copyPass2Button.addEventListener("click", async () => {
+  await copyCommandsToClipboard(state.studio.dualPassCommands.pass2, "pass2");
+});
+
+els.downloadPass1Button.addEventListener("click", () => {
+  downloadCommands(state.studio.dualPassCommands.pass1, "tomodachi-pass1-brush3.txt", "pass1");
+});
+
+els.downloadPass2Button.addEventListener("click", () => {
+  downloadCommands(state.studio.dualPassCommands.pass2, "tomodachi-pass2-brush1.txt", "pass2");
 });
 
 els.studioClearLogButton.addEventListener("click", () => {
@@ -1338,6 +1566,13 @@ function setStudioBusy(isBusy) {
   els.speedPresetSelect.disabled = isBusy;
   els.speedPressInput.disabled = isBusy;
   els.speedDelayInput.disabled = isBusy;
+  els.ditherModeSelect.disabled = isBusy;
+  els.ditherAmountRange.disabled = isBusy;
+  els.colorDistanceSelect.disabled = isBusy;
+  els.resizeModeSelect.disabled = isBusy;
+  els.brightnessRange.disabled = isBusy;
+  els.contrastRange.disabled = isBusy;
+  els.saturationRange.disabled = isBusy;
   els.copyButton.disabled = isBusy || state.commands.length === 0;
   els.downloadButton.disabled = isBusy || state.commands.length === 0;
   syncStudioUi();
@@ -1942,6 +2177,17 @@ function syncStudioUi() {
   els.speedPressInput.value = String(state.studio.buttonPressMs);
   els.speedDelayInput.value = String(state.studio.inputDelayMs);
   els.speedCustomRow.classList.toggle("hidden", state.studio.speedPreset !== "custom");
+  els.ditherModeSelect.value = state.studio.ditherMode;
+  els.ditherAmountRange.value = String(state.studio.ditherAmount);
+  els.ditherAmountValue.textContent = `${state.studio.ditherAmount}%`;
+  els.colorDistanceSelect.value = state.studio.colorDistanceMode;
+  els.resizeModeSelect.value = state.studio.resizeMode;
+  els.brightnessRange.value = String(state.studio.brightness);
+  els.brightnessValue.textContent = String(state.studio.brightness);
+  els.contrastRange.value = String(state.studio.contrast);
+  els.contrastValue.textContent = String(state.studio.contrast);
+  els.saturationRange.value = String(state.studio.saturation);
+  els.saturationValue.textContent = String(state.studio.saturation);
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();
   const backgroundHint = state.studio.removeBackground
@@ -1974,6 +2220,13 @@ function syncStudioUi() {
   els.speedPresetSelect.disabled = state.studio.busy || executionActive;
   els.speedPressInput.disabled = state.studio.busy || executionActive;
   els.speedDelayInput.disabled = state.studio.busy || executionActive;
+  els.ditherModeSelect.disabled = state.studio.busy || executionActive;
+  els.ditherAmountRange.disabled = state.studio.busy || executionActive || state.studio.ditherMode === "none";
+  els.colorDistanceSelect.disabled = state.studio.busy || executionActive;
+  els.resizeModeSelect.disabled = state.studio.busy || executionActive;
+  els.brightnessRange.disabled = state.studio.busy || executionActive;
+  els.contrastRange.disabled = state.studio.busy || executionActive;
+  els.saturationRange.disabled = state.studio.busy || executionActive;
   els.autoRemoveBackgroundCheckbox.disabled = state.studio.busy || executionActive;
   els.previewGuideSelect.disabled = false;
   els.colorCountSelect.disabled =
@@ -2009,6 +2262,11 @@ function syncStudioUi() {
     state.studio.dualPassCommands.pass2.length === 0 ||
     !hasPort ||
     !controllerReady;
+  els.dualPassScriptActions.classList.toggle("hidden", !state.studio.dualPass);
+  els.copyPass1Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass1.length === 0;
+  els.downloadPass1Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass1.length === 0;
+  els.copyPass2Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass2.length === 0;
+  els.downloadPass2Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass2.length === 0;
   els.generateButton.disabled = state.studio.busy || executionActive;
   els.pauseExecutionButton.disabled = !executionRunning;
   els.resumeExecutionButton.disabled = !executionPaused;
@@ -2683,6 +2941,20 @@ function setStudioInputDelayMs(value) {
   const changed = nextValue !== state.studio.inputDelayMs || state.studio.speedPreset !== "custom";
   state.studio.inputDelayMs = nextValue;
   state.studio.speedPreset = "custom";
+  syncStudioUi();
+
+  if (changed) {
+    scheduleStudioPreviewRefresh();
+  }
+}
+
+function setStudioAdjustment(key, value) {
+  const nextValue = normalizeStudioNumericValue(value, state.studio[key], {
+    min: -100,
+    max: 100,
+  });
+  const changed = nextValue !== state.studio[key];
+  state.studio[key] = nextValue;
   syncStudioUi();
 
   if (changed) {

@@ -24,7 +24,7 @@ import {
   type SerialSessionSnapshot,
 } from "../serial/sender.js";
 import { SimulatedAckSender } from "../simulator/sender.js";
-import type { SenderControls } from "../types.js";
+import type { ColorDistanceMode, DitherMode, SenderControls } from "../types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -358,6 +358,30 @@ function normalizeTimingMs(value: unknown, fallback: number): number {
   return Math.max(16, Math.min(500, Math.round(value)));
 }
 
+function normalizeAdjustment(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 0;
+  }
+
+  return Math.max(-100, Math.min(100, Math.round(value)));
+}
+
+function normalizeDitherMode(value: unknown): DitherMode {
+  return value === "fs" || value === "atkinson" || value === "ordered" ? value : "none";
+}
+
+function normalizeColorDistanceMode(value: unknown): ColorDistanceMode {
+  return value === "rgb" || value === "lab" ? value : "weighted";
+}
+
+function normalizeDitherAmount(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return 1;
+  }
+
+  return Math.max(0, Math.min(1, value));
+}
+
 function normalizeImageScalePercent(value: unknown, fallback = 100): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -409,7 +433,7 @@ function makeCliOverrides(input: {
   height?: number;
   colors?: number;
   threshold?: number;
-  resizeMode?: "contain" | "cover";
+  resizeMode?: "contain" | "cover" | "stretch";
   mode?: "mono" | "palette" | "official";
   palette?: string[];
 }): CliOptions {
@@ -446,13 +470,19 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     threshold?: number;
     mode?: "mono" | "palette" | "official";
     colors?: number;
-    resizeMode?: "contain" | "cover";
+    resizeMode?: "contain" | "cover" | "stretch";
     palette?: string[];
     previewScale?: number;
     removeBackground?: boolean;
     dualPass?: boolean;
     buttonPressMs?: number;
     inputDelayMs?: number;
+    ditherMode?: DitherMode;
+    ditherAmount?: number;
+    colorDistanceMode?: ColorDistanceMode;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
   };
 
   if (!body.imageDataUrl) {
@@ -491,6 +521,12 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     imageOffsetXPercent,
     imageOffsetYPercent,
     removeBackground: body.removeBackground === true,
+    brightness: normalizeAdjustment(body.brightness),
+    contrast: normalizeAdjustment(body.contrast),
+    saturation: normalizeAdjustment(body.saturation),
+    ditherMode: normalizeDitherMode(body.ditherMode),
+    ditherAmount: normalizeDitherAmount(body.ditherAmount),
+    colorDistanceMode: normalizeColorDistanceMode(body.colorDistanceMode),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
   const useDualPass = body.dualPass === true && profile.colorMode === "official";
@@ -519,6 +555,12 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       dualPass: useDualPass,
       buttonPressMs: profile.buttonPressDuration,
       inputDelayMs: profile.inputDelay,
+      ditherMode: generationOptions.ditherMode,
+      ditherAmount: generationOptions.ditherAmount,
+      colorDistanceMode: generationOptions.colorDistanceMode,
+      brightness: generationOptions.brightness,
+      contrast: generationOptions.contrast,
+      saturation: generationOptions.saturation,
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,

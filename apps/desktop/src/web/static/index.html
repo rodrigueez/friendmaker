@@ -196,6 +196,34 @@
                   <option value="custom">自定义</option>
                 </select>
               </label>
+
+              <label>
+                <span>抖动算法</span>
+                <select id="dither-mode-select">
+                  <option value="none">无</option>
+                  <option value="fs" selected>Floyd-Steinberg</option>
+                  <option value="atkinson">Atkinson</option>
+                  <option value="ordered">Bayer</option>
+                </select>
+              </label>
+
+              <label>
+                <span>颜色距离</span>
+                <select id="color-distance-select">
+                  <option value="weighted" selected>加权 RGB</option>
+                  <option value="rgb">欧氏 RGB</option>
+                  <option value="lab">Lab</option>
+                </select>
+              </label>
+
+              <label>
+                <span>裁剪方式</span>
+                <select id="resize-mode-select">
+                  <option value="cover">cover</option>
+                  <option value="contain" selected>contain</option>
+                  <option value="stretch">stretch</option>
+                </select>
+              </label>
             </div>
 
             <div id="speed-custom-row" class="field-grid studio-settings-grid hidden">
@@ -208,6 +236,30 @@
                 <input id="speed-delay-input" type="number" min="16" max="500" step="1" value="60" />
               </label>
             </div>
+
+            <label class="range-row">
+              <span>抖动强度</span>
+              <input id="dither-amount-range" type="range" min="0" max="100" step="1" value="100" />
+              <strong id="dither-amount-value">100%</strong>
+            </label>
+
+            <label class="range-row">
+              <span>亮度</span>
+              <input id="brightness-range" type="range" min="-100" max="100" step="1" value="0" />
+              <strong id="brightness-value">0</strong>
+            </label>
+
+            <label class="range-row">
+              <span>对比度</span>
+              <input id="contrast-range" type="range" min="-100" max="100" step="1" value="0" />
+              <strong id="contrast-value">0</strong>
+            </label>
+
+            <label class="range-row">
+              <span>饱和度</span>
+              <input id="saturation-range" type="range" min="-100" max="100" step="1" value="0" />
+              <strong id="saturation-value">0</strong>
+            </label>
 
             <label class="range-row">
               <span id="threshold-label">单色阈值</span>
@@ -358,6 +410,14 @@
               </div>
             </div>
 
+            <div id="script-replay-row" class="preview-meta-strip hidden">
+              <div class="preview-meta-card">
+                <span>脚本回放</span>
+                <canvas id="script-replay-canvas" width="256" height="256" style="width:100%;image-rendering:pixelated;border-radius:8px;"></canvas>
+                <small id="script-replay-meta">-</small>
+              </div>
+            </div>
+
             <div class="preview-meta-strip">
               <div class="preview-meta-card">
                 <span>画布范围</span>
@@ -418,6 +478,13 @@
             <div class="action-row slim">
               <button id="copy-button" class="ghost" disabled>复制脚本</button>
               <button id="download-button" class="ghost" disabled>下载脚本</button>
+            </div>
+
+            <div id="dual-pass-script-actions" class="action-row slim hidden">
+              <button id="copy-pass1-button" class="ghost" disabled>复制 pass1</button>
+              <button id="download-pass1-button" class="ghost" disabled>下载 pass1</button>
+              <button id="copy-pass2-button" class="ghost" disabled>复制 pass2</button>
+              <button id="download-pass2-button" class="ghost" disabled>下载 pass2</button>
             </div>
           </section>
 

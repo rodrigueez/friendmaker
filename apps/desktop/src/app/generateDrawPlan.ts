@@ -5,7 +5,7 @@ import { renderPreviewToBuffer } from "../image/renderPreview.js";
 import { estimateRuntimeMs, generateScanlineCommands } from "../path/scanline.js";
 import { serializeCommands } from "../protocol/serializer.js";
 import type { DrawCommand } from "../protocol/commands.js";
-import type { CanvasBounds, DrawingProfile, PixelMap } from "../types.js";
+import type { CanvasBounds, ColorDistanceMode, DitherMode, DrawingProfile, PixelMap } from "../types.js";
 
 export interface DrawPlanPathStats {
   lineRunCount: number;
@@ -50,6 +50,12 @@ export async function generateDrawPlan(
     imageOffsetXPercent?: number;
     imageOffsetYPercent?: number;
     removeBackground?: boolean;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    ditherMode?: DitherMode;
+    ditherAmount?: number;
+    colorDistanceMode?: ColorDistanceMode;
   },
 ): Promise<DrawPlan> {
   const { pixelMap, usedColorIndexes } = await pixelizeImage(imageSource, profile, options);
@@ -169,6 +175,12 @@ export async function generateDualPassDrawPlan(
     imageOffsetXPercent?: number;
     imageOffsetYPercent?: number;
     removeBackground?: boolean;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    ditherMode?: DitherMode;
+    ditherAmount?: number;
+    colorDistanceMode?: ColorDistanceMode;
   },
 ): Promise<DualPassDrawPlan> {
   const coarseProfile = cloneProfileWithBrushSize(profile, 3);

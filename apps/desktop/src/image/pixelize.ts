@@ -1,4 +1,4 @@
-import type { DrawingProfile, PixelizationResult } from "../types.js";
+import type { ColorDistanceMode, DitherMode, DrawingProfile, PixelizationResult, RawImageData } from "../types.js";
 import { createBrushGrid } from "../brushGrid.js";
 import type { ImageSource } from "./loadImage.js";
 import { autoRemoveBackground } from "./removeBackground.js";
@@ -125,6 +125,12 @@ export async function pixelizeImage(
     imageOffsetXPercent?: number;
     imageOffsetYPercent?: number;
     removeBackground?: boolean;
+    brightness?: number;
+    contrast?: number;
+    saturation?: number;
+    ditherMode?: DitherMode;
+    ditherAmount?: number;
+    colorDistanceMode?: ColorDistanceMode;
   },
 ): Promise<PixelizationResult> {
   const resizeOptions = {
@@ -142,13 +148,23 @@ export async function pixelizeImage(
       : {}),
   };
   const resizedImage = await resizeImage(imageSource, resizeOptions);
-  const rawImage = options?.removeBackground ? autoRemoveBackground(resizedImage) : resizedImage;
+  const rawImage = applyImageAdjustments(
+    options?.removeBackground ? autoRemoveBackground(resizedImage) : resizedImage,
+    {
+      brightness: options?.brightness ?? 0,
+      contrast: options?.contrast ?? 0,
+      saturation: options?.saturation ?? 0,
+    },
+  );
 
   const fullPixelMap = quantizePixels(rawImage, {
     colorMode: profile.colorMode,
     colorCount: profile.colorCount,
     monoThreshold: profile.monoThreshold,
     palette: profile.palette,
+    ditherMode: options?.ditherMode ?? "none",
+    ditherAmount: options?.ditherAmount ?? 1,
+    distanceMode: options?.colorDistanceMode ?? "weighted",
   });
   const pixelMap = collapsePixelMapForBrush(fullPixelMap, profile);
 
@@ -163,5 +179,49 @@ export async function pixelizeImage(
   return {
     pixelMap,
     usedColorIndexes,
+  };
+}
+
+function applyImageAdjustments(
+  image: RawImageData,
+  options: {
+    brightness: number;
+    contrast: number;
+    saturation: number;
+  },
+): RawImageData {
+  if (options.brightness === 0 && options.contrast === 0 && options.saturation === 0) {
+    return image;
+  }
+
+  const data = Buffer.from(image.data);
+  const contrast = (options.contrast + 100) / 100;
+  const saturation = (options.saturation + 100) / 100;
+
+  for (let offset = 0; offset < data.length; offset += image.channels) {
+    let r = data[offset] ?? 0;
+    let g = data[offset + 1] ?? 0;
+    let b = data[offset + 2] ?? 0;
+
+    r += options.brightness;
+    g += options.brightness;
+    b += options.brightness;
+    r = (r - 128) * contrast + 128;
+    g = (g - 128) * contrast + 128;
+    b = (b - 128) * contrast + 128;
+
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = luminance + (r - luminance) * saturation;
+    g = luminance + (g - luminance) * saturation;
+    b = luminance + (b - luminance) * saturation;
+
+    data[offset] = Math.max(0, Math.min(255, Math.round(r)));
+    data[offset + 1] = Math.max(0, Math.min(255, Math.round(g)));
+    data[offset + 2] = Math.max(0, Math.min(255, Math.round(b)));
+  }
+
+  return {
+    ...image,
+    data,
   };
 }
