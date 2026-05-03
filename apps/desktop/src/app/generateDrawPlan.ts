@@ -2,7 +2,7 @@ import type { ImageSource } from "../image/loadImage.js";
 import { createBrushGrid, gridCellBounds, isGridCellInBounds } from "../brushGrid.js";
 import { pixelizeImage } from "../image/pixelize.js";
 import { renderPreviewToBuffer } from "../image/renderPreview.js";
-import { estimateRuntimeMs, generateScanlineCommands } from "../path/scanline.js";
+import { estimateRuntimeMs, generateScanlineCommands, type PathStrategy } from "../path/scanline.js";
 import { serializeCommands } from "../protocol/serializer.js";
 import type { DrawCommand } from "../protocol/commands.js";
 import type { CanvasBounds, ColorDistanceMode, DitherMode, DrawingProfile, PixelMap } from "../types.js";
@@ -59,11 +59,12 @@ export async function generateDrawPlan(
     colorDistanceMode?: ColorDistanceMode;
     mergeSimilarColors?: boolean;
     mergeThreshold?: number;
+    pathStrategy?: PathStrategy;
   },
 ): Promise<DrawPlan> {
   const { pixelMap, usedColorIndexes, colorCounts } = await pixelizeImage(imageSource, profile, options);
   const previewPng = await renderPreviewToBuffer(pixelMap, profile, previewScale);
-  const drawCommands = generateScanlineCommands(pixelMap, profile);
+  const drawCommands = generateScanlineCommands(pixelMap, profile, options?.pathStrategy);
   const imageBounds = calculateCanvasBounds(pixelMap, profile);
   const pathStats = calculatePathStats(drawCommands);
   const paletteHexes = Array.from(
@@ -187,6 +188,7 @@ export async function generateDualPassDrawPlan(
     colorDistanceMode?: ColorDistanceMode;
     mergeSimilarColors?: boolean;
     mergeThreshold?: number;
+    pathStrategy?: PathStrategy;
   },
 ): Promise<DualPassDrawPlan> {
   const coarseProfile = cloneProfileWithBrushSize(profile, 3);
@@ -195,7 +197,7 @@ export async function generateDualPassDrawPlan(
   const { pixelMap: targetMap, usedColorIndexes, colorCounts } = await pixelizeImage(imageSource, fineProfile, options);
   const correctionMap = buildDualPassCorrectionMap(targetMap, pass1.pixelMap);
   const correctedPreviewMap = buildDualPassCorrectedPreviewMap(targetMap, pass1.pixelMap);
-  const pass2Commands = generateScanlineCommands(correctionMap, fineProfile);
+  const pass2Commands = generateScanlineCommands(correctionMap, fineProfile, options?.pathStrategy);
   const pass2PathStats = calculatePathStats(pass2Commands);
   const pass2PreviewPng = await renderPreviewToBuffer(correctionMap, fineProfile, previewScale);
   const correctedPreviewPng = await renderPreviewToBuffer(correctedPreviewMap, fineProfile, previewScale);
