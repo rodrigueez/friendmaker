@@ -350,6 +350,14 @@ function normalizeBrushSize(value: unknown, fallback: 1 | 3 | 7 | 13 | 19 | 27):
     : fallback;
 }
 
+function normalizeTimingMs(value: unknown, fallback: number): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return fallback;
+  }
+
+  return Math.max(16, Math.min(500, Math.round(value)));
+}
+
 function normalizeImageScalePercent(value: unknown, fallback = 100): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -443,6 +451,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     previewScale?: number;
     removeBackground?: boolean;
     dualPass?: boolean;
+    buttonPressMs?: number;
+    inputDelayMs?: number;
   };
 
   if (!body.imageDataUrl) {
@@ -472,6 +482,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
   const profile = {
     ...baseProfile,
     brushSize: normalizeBrushSize(body.brushSize, baseProfile.brushSize),
+    buttonPressDuration: normalizeTimingMs(body.buttonPressMs, baseProfile.buttonPressDuration),
+    inputDelay: normalizeTimingMs(body.inputDelayMs, baseProfile.inputDelay),
   };
 
   const generationOptions = {
@@ -505,6 +517,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       ackTimeoutMs: profile.ackTimeoutMs,
       commandRetryCount: profile.commandRetryCount,
       dualPass: useDualPass,
+      buttonPressMs: profile.buttonPressDuration,
+      inputDelayMs: profile.inputDelay,
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,

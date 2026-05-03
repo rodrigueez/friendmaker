@@ -185,6 +185,28 @@
                   <small>官方色绘制时先生成 brush 3 粗绘，再生成 brush 1 修正。</small>
                 </span>
               </label>
+
+              <label>
+                <span>绘制速度</span>
+                <select id="speed-preset-select">
+                  <option value="100,100">默认 100/100（最稳）</option>
+                  <option value="60,60" selected>较快 60/60</option>
+                  <option value="40,40">激进 40/40</option>
+                  <option value="25,25">极限 25/25</option>
+                  <option value="custom">自定义</option>
+                </select>
+              </label>
+            </div>
+
+            <div id="speed-custom-row" class="field-grid studio-settings-grid hidden">
+              <label>
+                <span>按键时长 ms</span>
+                <input id="speed-press-input" type="number" min="16" max="500" step="1" value="60" />
+              </label>
+              <label>
+                <span>按键间隔 ms</span>
+                <input id="speed-delay-input" type="number" min="16" max="500" step="1" value="60" />
+              </label>
             </div>
 
             <label class="range-row">

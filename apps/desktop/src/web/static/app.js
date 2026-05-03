@@ -64,6 +64,9 @@ const state = {
     colorCount: 32,
     removeBackground: false,
     dualPass: false,
+    speedPreset: "60,60",
+    buttonPressMs: 60,
+    inputDelayMs: 60,
     dualPassCommands: {
       pass1: [],
       pass2: [],
@@ -155,6 +158,10 @@ const els = {
   colorModeSelect: document.getElementById("color-mode-select"),
   colorCountSelect: document.getElementById("color-count-select"),
   dualPassCheckbox: document.getElementById("dual-pass-checkbox"),
+  speedPresetSelect: document.getElementById("speed-preset-select"),
+  speedCustomRow: document.getElementById("speed-custom-row"),
+  speedPressInput: document.getElementById("speed-press-input"),
+  speedDelayInput: document.getElementById("speed-delay-input"),
   thresholdLabel: document.getElementById("threshold-label"),
   thresholdRange: document.getElementById("threshold-range"),
   thresholdValue: document.getElementById("threshold-value"),
@@ -278,6 +285,11 @@ const STUDIO_IMAGE_OFFSET_LIMITS = {
   max: 100,
 };
 
+const STUDIO_SPEED_LIMITS = {
+  min: 16,
+  max: 500,
+};
+
 const VALID_PAGE_NAMES = new Set(["studio", "firmware", "controller"]);
 
 els.pageTabs.forEach((button) => {
@@ -355,6 +367,18 @@ els.dualPassCheckbox.addEventListener("change", () => {
   state.studio.dualPass = els.dualPassCheckbox.checked;
   syncStudioUi();
   scheduleStudioPreviewRefresh();
+});
+
+els.speedPresetSelect.addEventListener("change", () => {
+  setStudioSpeedPreset(els.speedPresetSelect.value);
+});
+
+els.speedPressInput.addEventListener("change", () => {
+  setStudioButtonPressMs(els.speedPressInput.value);
+});
+
+els.speedDelayInput.addEventListener("change", () => {
+  setStudioInputDelayMs(els.speedDelayInput.value);
 });
 
 els.autoRemoveBackgroundCheckbox.addEventListener("change", () => {
@@ -548,6 +572,8 @@ function buildStudioGeneratePayload() {
     previewScale: 12,
     removeBackground: state.studio.removeBackground,
     dualPass: state.studio.dualPass,
+    buttonPressMs: state.studio.buttonPressMs,
+    inputDelayMs: state.studio.inputDelayMs,
   };
 }
 
@@ -593,6 +619,8 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.colorCount = payload.profile.colorCount ?? state.studio.colorCount;
   state.studio.removeBackground = payload.profile.removeBackground === true;
   state.studio.dualPass = payload.profile.dualPass === true;
+  state.studio.buttonPressMs = payload.profile.buttonPressMs ?? state.studio.buttonPressMs;
+  state.studio.inputDelayMs = payload.profile.inputDelayMs ?? state.studio.inputDelayMs;
   state.studio.dualPassCommands = {
     pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
     pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
@@ -1307,6 +1335,9 @@ function setStudioBusy(isBusy) {
   els.sizeSelect.disabled = isBusy;
   els.brushSizeSelect.disabled = isBusy;
   els.dualPassCheckbox.disabled = isBusy;
+  els.speedPresetSelect.disabled = isBusy;
+  els.speedPressInput.disabled = isBusy;
+  els.speedDelayInput.disabled = isBusy;
   els.copyButton.disabled = isBusy || state.commands.length === 0;
   els.downloadButton.disabled = isBusy || state.commands.length === 0;
   syncStudioUi();
@@ -1907,6 +1938,10 @@ function syncStudioUi() {
   els.previewCanvas.dataset.guide = state.studio.previewGuideMode;
   els.colorModeSelect.value = state.studio.colorMode;
   els.dualPassCheckbox.checked = state.studio.dualPass;
+  els.speedPresetSelect.value = state.studio.speedPreset;
+  els.speedPressInput.value = String(state.studio.buttonPressMs);
+  els.speedDelayInput.value = String(state.studio.inputDelayMs);
+  els.speedCustomRow.classList.toggle("hidden", state.studio.speedPreset !== "custom");
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();
   const backgroundHint = state.studio.removeBackground
@@ -1914,14 +1949,15 @@ function syncStudioUi() {
     : "当前不会自动扣背景；如果素材是白底或棋盘格假透明图，建议开启。";
   const squareBrushHint = "建议同时把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。";
   const scaleHint = `当前导入缩放是 ${state.studio.imageScalePercent}%，100% 表示完整放进画布。`;
+  const speedHint = `绘制速度为按键 ${state.studio.buttonPressMs}ms / 间隔 ${state.studio.inputDelayMs}ms。`;
   const positionHint = describeImagePosition(
     state.studio.imageOffsetXPercent,
     state.studio.imageOffsetYPercent,
   );
   els.studioModeHint.textContent =
     state.studio.colorMode === "mono"
-      ? `深色像素会绘制，浅色像素会保留为空白背景。当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再放进 256x256 脚本坐标画布，并按 ${state.studio.brushSize} 号笔和画布中心起步生成。${scaleHint}${positionHint}${squareBrushHint}${backgroundHint}`
-      : `当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再把图片压到 ${state.studio.colorCount} 个官方色以内，并映射到游戏内置的 7x12 官方色盘，再按 ${state.studio.brushSize} 号笔生成。${scaleHint}${positionHint}开始前请保持右侧 9 个槽位默认颜色不变。${squareBrushHint}${backgroundHint}`;
+      ? `深色像素会绘制，浅色像素会保留为空白背景。当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再放进 256x256 脚本坐标画布，并按 ${state.studio.brushSize} 号笔和画布中心起步生成。${scaleHint}${positionHint}${speedHint}${squareBrushHint}${backgroundHint}`
+      : `当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再把图片压到 ${state.studio.colorCount} 个官方色以内，并映射到游戏内置的 7x12 官方色盘，再按 ${state.studio.brushSize} 号笔生成。${scaleHint}${positionHint}${speedHint}开始前请保持右侧 9 个槽位默认颜色不变。${squareBrushHint}${backgroundHint}`;
   els.studioPortSelect.disabled = state.studio.busy || executionActive;
   els.refreshPortsButton.disabled = state.studio.busy || executionActive;
   els.sizeSelect.disabled = state.studio.busy || executionActive;
@@ -1935,6 +1971,9 @@ function syncStudioUi() {
   els.colorModeSelect.disabled = state.studio.busy || executionActive;
   els.dualPassCheckbox.disabled =
     state.studio.busy || executionActive || state.studio.colorMode !== "official";
+  els.speedPresetSelect.disabled = state.studio.busy || executionActive;
+  els.speedPressInput.disabled = state.studio.busy || executionActive;
+  els.speedDelayInput.disabled = state.studio.busy || executionActive;
   els.autoRemoveBackgroundCheckbox.disabled = state.studio.busy || executionActive;
   els.previewGuideSelect.disabled = false;
   els.colorCountSelect.disabled =
@@ -2599,6 +2638,51 @@ function setStudioImageOffsetYPercent(value) {
   );
   const changed = nextValue !== state.studio.imageOffsetYPercent;
   state.studio.imageOffsetYPercent = nextValue;
+  syncStudioUi();
+
+  if (changed) {
+    scheduleStudioPreviewRefresh();
+  }
+}
+
+function applyStudioSpeedPresetValue(value) {
+  const [press, delay] = String(value).split(",").map((part) => Number(part));
+
+  if (Number.isFinite(press) && Number.isFinite(delay)) {
+    state.studio.buttonPressMs = normalizeStudioNumericValue(press, state.studio.buttonPressMs, STUDIO_SPEED_LIMITS);
+    state.studio.inputDelayMs = normalizeStudioNumericValue(delay, state.studio.inputDelayMs, STUDIO_SPEED_LIMITS);
+  }
+}
+
+function setStudioSpeedPreset(value) {
+  const nextPreset = value === "custom" ? "custom" : String(value);
+  state.studio.speedPreset = nextPreset;
+
+  if (nextPreset !== "custom") {
+    applyStudioSpeedPresetValue(nextPreset);
+  }
+
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+}
+
+function setStudioButtonPressMs(value) {
+  const nextValue = normalizeStudioNumericValue(value, state.studio.buttonPressMs, STUDIO_SPEED_LIMITS);
+  const changed = nextValue !== state.studio.buttonPressMs || state.studio.speedPreset !== "custom";
+  state.studio.buttonPressMs = nextValue;
+  state.studio.speedPreset = "custom";
+  syncStudioUi();
+
+  if (changed) {
+    scheduleStudioPreviewRefresh();
+  }
+}
+
+function setStudioInputDelayMs(value) {
+  const nextValue = normalizeStudioNumericValue(value, state.studio.inputDelayMs, STUDIO_SPEED_LIMITS);
+  const changed = nextValue !== state.studio.inputDelayMs || state.studio.speedPreset !== "custom";
+  state.studio.inputDelayMs = nextValue;
+  state.studio.speedPreset = "custom";
   syncStudioUi();
 
   if (changed) {
