@@ -1193,11 +1193,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
       return;
     }
 
-    if (request.method === "GET" && url.pathname === "/tomodachi-palette.html") {
-      await serveStatic(response, "tomodachi-palette.html");
-      return;
-    }
-
     if (request.method === "GET" && url.pathname === "/api/ports") {
       await handlePorts(response);
       return;
