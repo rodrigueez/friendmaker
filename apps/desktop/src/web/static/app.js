@@ -109,6 +109,32 @@ const state = {
       lastSampleElapsedMs: 0,
     },
   },
+  custom: {
+    dualPass: false,
+    brushSize: 3,
+    commands: [],
+    pass1Commands: [],
+    pass2Commands: [],
+    execution: {
+      id: null,
+      status: "idle",
+      totalCommands: 0,
+      completedCommands: 0,
+      currentCommand: null,
+      startedAt: null,
+      finishedAt: null,
+      error: null,
+      lineCount: 0,
+    },
+    executionClock: {
+      id: null,
+      elapsedMs: 0,
+      runningSince: null,
+      avgMsPerCommand: null,
+      lastDone: 0,
+      lastSampleElapsedMs: 0,
+    },
+  },
   firmware: {
     busy: false,
     environmentId: "esp32dev_wireless",
@@ -229,6 +255,34 @@ const els = {
   downloadPass2Button: document.getElementById("download-pass2-button"),
   studioLogOutput: document.getElementById("log-output"),
   studioClearLogButton: document.getElementById("studio-clear-log-button"),
+  customDualPassCheckbox: document.getElementById("custom-dual-pass-checkbox"),
+  customBrushSizeSelect: document.getElementById("custom-brush-size-select"),
+  customPortSelect: document.getElementById("custom-port-select"),
+  customCommandsInput: document.getElementById("custom-commands-input"),
+  customDualInputs: document.getElementById("custom-dual-inputs"),
+  customPass1Input: document.getElementById("custom-pass1-input"),
+  customPass2Input: document.getElementById("custom-pass2-input"),
+  customPreviewButton: document.getElementById("custom-preview-button"),
+  customNormalizeButton: document.getElementById("custom-normalize-button"),
+  customClearButton: document.getElementById("custom-clear-button"),
+  customExecuteButton: document.getElementById("custom-execute-button"),
+  customExecutePass1Button: document.getElementById("custom-execute-pass1-button"),
+  customExecutePass2Button: document.getElementById("custom-execute-pass2-button"),
+  customPauseButton: document.getElementById("custom-pause-button"),
+  customResumeButton: document.getElementById("custom-resume-button"),
+  customStopButton: document.getElementById("custom-stop-button"),
+  customExecutionStatus: document.getElementById("custom-execution-status"),
+  customReplayCanvas: document.getElementById("custom-replay-canvas"),
+  customStatCommands: document.getElementById("custom-stat-commands"),
+  customStatDrawn: document.getElementById("custom-stat-drawn"),
+  customStatMode: document.getElementById("custom-stat-mode"),
+  customCopyButton: document.getElementById("custom-copy-button"),
+  customDownloadButton: document.getElementById("custom-download-button"),
+  customCopyPass1Button: document.getElementById("custom-copy-pass1-button"),
+  customCopyPass2Button: document.getElementById("custom-copy-pass2-button"),
+  customRefreshPortsButton: document.getElementById("custom-refresh-ports-button"),
+  customLogOutput: document.getElementById("custom-log-output"),
+  customClearLogButton: document.getElementById("custom-clear-log-button"),
   statColors: document.getElementById("stat-colors"),
   statPixels: document.getElementById("stat-pixels"),
   statCommands: document.getElementById("stat-commands"),
@@ -290,6 +344,7 @@ const els = {
 };
 
 let studioExecutionPollTimer = null;
+let customExecutionPollTimer = null;
 let firmwareToolingPollTimer = null;
 let windowsSerialDriverPollTimer = null;
 let studioPreviewRefreshTimer = null;
@@ -316,7 +371,7 @@ const STUDIO_SPEED_LIMITS = {
   max: 500,
 };
 
-const VALID_PAGE_NAMES = new Set(["studio", "firmware", "controller"]);
+const VALID_PAGE_NAMES = new Set(["studio", "custom", "firmware", "controller"]);
 
 els.pageTabs.forEach((button) => {
   button.addEventListener("click", () => {
@@ -464,11 +519,12 @@ els.thresholdRange.addEventListener("input", () => {
   scheduleStudioPreviewRefresh();
 });
 
-[els.studioPortSelect, els.firmwarePortSelect, els.controllerPortSelect].forEach((select) => {
+[els.studioPortSelect, els.customPortSelect, els.firmwarePortSelect, els.controllerPortSelect].forEach((select) => {
   select.addEventListener("change", () => {
     state.selectedPortPath = select.value;
     renderPortSelects();
     syncStudioUi();
+    syncCustomUi();
     syncFirmwareUi();
     syncControllerUi();
   });
@@ -589,6 +645,86 @@ els.stopExecutionButton.addEventListener("click", async () => {
 
 els.resetExecutionButton.addEventListener("click", async () => {
   await sendStudioExecutionControl("reset", "强制恢复绘制状态");
+});
+
+els.customDualPassCheckbox.addEventListener("change", () => {
+  state.custom.dualPass = els.customDualPassCheckbox.checked;
+  syncCustomUi();
+  renderCustomPreview();
+});
+
+els.customBrushSizeSelect.addEventListener("change", () => {
+  state.custom.brushSize = Number(els.customBrushSizeSelect.value) || 3;
+  syncCustomUi();
+  renderCustomPreview();
+});
+
+els.customPreviewButton.addEventListener("click", () => {
+  renderCustomPreview();
+});
+
+els.customNormalizeButton.addEventListener("click", () => {
+  normalizeCustomCommandInputs();
+});
+
+els.customClearButton.addEventListener("click", () => {
+  els.customCommandsInput.value = "";
+  els.customPass1Input.value = "";
+  els.customPass2Input.value = "";
+  renderCustomPreview();
+});
+
+els.customExecuteButton.addEventListener("click", async () => {
+  renderCustomPreview();
+  await executeCustomCommands(getCustomCombinedCommands(), "开始执行自定义脚本");
+});
+
+els.customExecutePass1Button.addEventListener("click", async () => {
+  renderCustomPreview();
+  await executeCustomCommands(state.custom.pass1Commands, "开始执行自定义 pass1");
+});
+
+els.customExecutePass2Button.addEventListener("click", async () => {
+  renderCustomPreview();
+  await executeCustomCommands(state.custom.pass2Commands, "开始执行自定义 pass2");
+});
+
+els.customPauseButton.addEventListener("click", async () => {
+  await sendCustomExecutionControl("pause", "暂停");
+});
+
+els.customResumeButton.addEventListener("click", async () => {
+  await sendCustomExecutionControl("resume", "继续");
+});
+
+els.customStopButton.addEventListener("click", async () => {
+  await sendCustomExecutionControl("stop", "中断");
+});
+
+els.customCopyButton.addEventListener("click", async () => {
+  await copyCommandsToClipboard(getCustomCombinedCommands(), "自定义脚本");
+});
+
+els.customDownloadButton.addEventListener("click", () => {
+  downloadCommands(getCustomCombinedCommands(), "custom-friendmaker-commands.txt", "自定义脚本");
+});
+
+els.customCopyPass1Button.addEventListener("click", async () => {
+  await copyCommandsToClipboard(state.custom.pass1Commands, "自定义 pass1");
+});
+
+els.customCopyPass2Button.addEventListener("click", async () => {
+  await copyCommandsToClipboard(state.custom.pass2Commands, "自定义 pass2");
+});
+
+els.customRefreshPortsButton.addEventListener("click", async () => {
+  await refreshPorts({
+    log: (message) => appendLog(els.customLogOutput, message),
+  });
+});
+
+els.customClearLogButton.addEventListener("click", () => {
+  clearLog(els.customLogOutput);
 });
 
 async function generateStudioCommands({ logPrefix }) {
@@ -1043,6 +1179,114 @@ async function executeStudioCommands({ logPrefix, commands = state.commands }) {
     return false;
   } finally {
     setStudioBusy(false);
+  }
+}
+
+function parseCustomCommandText(text) {
+  return String(text ?? "")
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter((line) => line && !line.startsWith("#"));
+}
+
+function getCustomCombinedCommands() {
+  return state.custom.dualPass
+    ? [...state.custom.pass1Commands, ...state.custom.pass2Commands]
+    : state.custom.commands;
+}
+
+function normalizeCustomCommandInputs() {
+  if (state.custom.dualPass) {
+    els.customPass1Input.value = parseCustomCommandText(els.customPass1Input.value).join("\n");
+    els.customPass2Input.value = parseCustomCommandText(els.customPass2Input.value).join("\n");
+  } else {
+    els.customCommandsInput.value = parseCustomCommandText(els.customCommandsInput.value).join("\n");
+  }
+
+  renderCustomPreview();
+}
+
+function renderCustomPreview() {
+  state.custom.commands = parseCustomCommandText(els.customCommandsInput.value);
+  state.custom.pass1Commands = parseCustomCommandText(els.customPass1Input.value);
+  state.custom.pass2Commands = parseCustomCommandText(els.customPass2Input.value);
+
+  const canvas = els.customReplayCanvas;
+  const ctx = canvas.getContext("2d");
+
+  canvas.width = state.studio.canvasSize;
+  canvas.height = state.studio.canvasSize;
+
+  if (!ctx) {
+    return;
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  let drawn = 0;
+  if (state.custom.dualPass) {
+    drawn += runScriptOnReplayCanvas(ctx, state.custom.pass1Commands, 3);
+    drawn += runScriptOnReplayCanvas(ctx, state.custom.pass2Commands, 1);
+  } else {
+    drawn += runScriptOnReplayCanvas(ctx, state.custom.commands, state.custom.brushSize);
+  }
+
+  const totalCommands = getCustomCombinedCommands().length;
+  els.customStatCommands.textContent = String(totalCommands);
+  els.customStatDrawn.textContent = String(drawn);
+  els.customStatMode.textContent = state.custom.dualPass ? "双遍" : `brush ${state.custom.brushSize}`;
+  syncCustomUi();
+}
+
+async function executeCustomCommands(commands, logPrefix) {
+  if (!commands.length) {
+    appendLog(els.customLogOutput, "没有可执行的命令。");
+    return false;
+  }
+
+  if (!state.selectedPortPath) {
+    appendLog(els.customLogOutput, "请先选择一个串口设备。");
+    return false;
+  }
+
+  if (!isControllerReadyForStudio()) {
+    appendLog(els.customLogOutput, "开始执行前，请先到“手柄测试”页把手柄连接状态跑到“已就绪”。");
+    switchPage("controller");
+    return false;
+  }
+
+  appendLog(els.customLogOutput, `${logPrefix}：${commands.length} 条命令`);
+  syncCustomUi();
+
+  try {
+    const response = await fetch("/api/execution/start", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        target: "serial",
+        commands,
+        portPath: state.selectedPortPath,
+        baudRate: state.studio.profile.baudRate,
+        ackTimeoutMs: state.studio.profile.ackTimeoutMs,
+        retries: state.studio.profile.commandRetryCount,
+      }),
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      applySerialSessionSnapshot(payload.session);
+      throw new Error(payload.error ?? "执行失败");
+    }
+
+    applySerialSessionSnapshot(payload.session);
+    applyCustomExecutionSnapshot(payload.execution);
+    startCustomExecutionPolling();
+    return true;
+  } catch (error) {
+    appendLog(els.customLogOutput, `执行失败：${getErrorMessage(error)}`);
+    return false;
+  } finally {
+    syncCustomUi();
   }
 }
 
@@ -1804,6 +2048,199 @@ async function sendStudioExecutionControl(action, label) {
   }
 }
 
+function isCustomExecutionActive() {
+  return ["running", "paused", "stopping"].includes(state.custom.execution.status);
+}
+
+function pauseCustomExecutionClock() {
+  const clock = state.custom.executionClock;
+  if (clock.runningSince !== null) {
+    clock.elapsedMs += performance.now() - clock.runningSince;
+    clock.runningSince = null;
+  }
+}
+
+function resumeCustomExecutionClock() {
+  const clock = state.custom.executionClock;
+  if (clock.runningSince === null) {
+    clock.runningSince = performance.now();
+  }
+}
+
+function getCustomExecutionElapsedMs() {
+  const clock = state.custom.executionClock;
+  return clock.runningSince === null ? clock.elapsedMs : clock.elapsedMs + performance.now() - clock.runningSince;
+}
+
+function syncCustomExecutionClock(execution, isNewExecution) {
+  const clock = state.custom.executionClock;
+
+  if (isNewExecution) {
+    state.custom.executionClock = {
+      id: execution.id,
+      elapsedMs: 0,
+      runningSince: execution.status === "running" ? performance.now() : null,
+      avgMsPerCommand: null,
+      lastDone: execution.completedCommands,
+      lastSampleElapsedMs: 0,
+    };
+    return;
+  }
+
+  if (execution.status === "running") {
+    resumeCustomExecutionClock();
+  } else {
+    pauseCustomExecutionClock();
+  }
+
+  const elapsed = getCustomExecutionElapsedMs();
+  const deltaDone = execution.completedCommands - clock.lastDone;
+  const deltaMs = elapsed - clock.lastSampleElapsedMs;
+
+  if (execution.status === "running" && deltaDone > 0 && deltaMs > 0) {
+    const sampleMsPerCommand = deltaMs / deltaDone;
+    clock.avgMsPerCommand =
+      clock.avgMsPerCommand === null
+        ? sampleMsPerCommand
+        : clock.avgMsPerCommand * 0.65 + sampleMsPerCommand * 0.35;
+    clock.lastDone = execution.completedCommands;
+    clock.lastSampleElapsedMs = elapsed;
+  } else if (execution.completedCommands < clock.lastDone) {
+    clock.lastDone = execution.completedCommands;
+    clock.lastSampleElapsedMs = elapsed;
+  }
+}
+
+function getCustomExecutionTimerLabel() {
+  const execution = state.custom.execution;
+  if (!execution.id || execution.totalCommands <= 0) {
+    return "";
+  }
+
+  const elapsed = getCustomExecutionElapsedMs();
+  const remainingCommands = Math.max(0, execution.totalCommands - execution.completedCommands);
+  let remaining = "--";
+
+  if (remainingCommands === 0) {
+    remaining = "0:00";
+  } else if (state.custom.executionClock.avgMsPerCommand !== null) {
+    remaining = formatStudioClock(state.custom.executionClock.avgMsPerCommand * remainingCommands);
+  } else if (execution.completedCommands > 0) {
+    remaining = formatStudioClock((elapsed / execution.completedCommands) * remainingCommands);
+  }
+
+  return ` · 已执行 ${formatStudioClock(elapsed)} · 预计剩余 ${remaining}`;
+}
+
+function applyCustomExecutionSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return;
+  }
+
+  const previousId = state.custom.execution.id;
+  const nextId = snapshot.id ?? null;
+  const isNewExecution = previousId !== nextId;
+  const existingLineCount = isNewExecution ? 0 : state.custom.execution.lineCount;
+  const lines = Array.isArray(snapshot.lines) ? snapshot.lines : [];
+  const nextLineCount = lines.length;
+  const newLines = lines.slice(existingLineCount);
+
+  state.custom.execution = {
+    ...state.custom.execution,
+    id: nextId,
+    status: typeof snapshot.status === "string" ? snapshot.status : state.custom.execution.status,
+    totalCommands:
+      typeof snapshot.totalCommands === "number" ? snapshot.totalCommands : state.custom.execution.totalCommands,
+    completedCommands:
+      typeof snapshot.completedCommands === "number"
+        ? snapshot.completedCommands
+        : state.custom.execution.completedCommands,
+    currentCommand:
+      typeof snapshot.currentCommand === "string" || snapshot.currentCommand === null
+        ? snapshot.currentCommand
+        : state.custom.execution.currentCommand,
+    startedAt:
+      typeof snapshot.startedAt === "number" || snapshot.startedAt === null
+        ? snapshot.startedAt
+        : state.custom.execution.startedAt,
+    finishedAt:
+      typeof snapshot.finishedAt === "number" || snapshot.finishedAt === null
+        ? snapshot.finishedAt
+        : state.custom.execution.finishedAt,
+    error:
+      typeof snapshot.error === "string" || snapshot.error === null ? snapshot.error : state.custom.execution.error,
+    lineCount: nextLineCount,
+  };
+  syncCustomExecutionClock(state.custom.execution, isNewExecution);
+  newLines.forEach((line) => appendLog(els.customLogOutput, `[device] ${line}`));
+
+  if (isCustomExecutionActive()) {
+    startCustomExecutionPolling();
+  } else {
+    stopCustomExecutionPolling();
+  }
+
+  syncCustomUi();
+}
+
+async function pollCustomExecutionStatus() {
+  try {
+    const response = await fetch("/api/execution/status");
+    const payload = await response.json();
+
+    if (!response.ok) {
+      applySerialSessionSnapshot(payload.session);
+      throw new Error(payload.error ?? "读取执行状态失败");
+    }
+
+    applyCustomExecutionSnapshot(payload.execution);
+    applySerialSessionSnapshot(payload.session);
+  } catch (error) {
+    stopCustomExecutionPolling();
+    appendLog(els.customLogOutput, `读取执行状态失败：${getErrorMessage(error)}`);
+  }
+}
+
+function startCustomExecutionPolling() {
+  if (customExecutionPollTimer) {
+    return;
+  }
+
+  customExecutionPollTimer = window.setInterval(() => {
+    void pollCustomExecutionStatus();
+  }, 800);
+}
+
+function stopCustomExecutionPolling() {
+  if (!customExecutionPollTimer) {
+    return;
+  }
+
+  window.clearInterval(customExecutionPollTimer);
+  customExecutionPollTimer = null;
+}
+
+async function sendCustomExecutionControl(action, label) {
+  try {
+    const response = await fetch(`/api/execution/${action}`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+    });
+    const payload = await response.json();
+
+    if (!response.ok) {
+      applySerialSessionSnapshot(payload.session);
+      throw new Error(payload.error ?? `${label}失败`);
+    }
+
+    appendLog(els.customLogOutput, `${label}请求已发送。`);
+    applyCustomExecutionSnapshot(payload.execution);
+    applySerialSessionSnapshot(payload.session);
+  } catch (error) {
+    appendLog(els.customLogOutput, `${label}失败：${getErrorMessage(error)}`);
+  }
+}
+
 function setFirmwareBusy(isBusy) {
   state.firmware.busy = isBusy;
   els.firmwareRefreshButton.disabled = isBusy;
@@ -1885,6 +2322,7 @@ function applySerialSessionSnapshot(snapshot) {
         : state.serialSession.idleTimeoutMs,
     lastUsedAt: typeof snapshot.lastUsedAt === "number" ? snapshot.lastUsedAt : null,
   };
+  syncCustomUi();
   syncControllerUi();
 }
 
@@ -2079,6 +2517,75 @@ function renderStudioExecutionStatus() {
       els.studioExecutionStatus.textContent = "当前未开始绘制。";
       break;
   }
+}
+
+function renderCustomExecutionStatus() {
+  const execution = state.custom.execution;
+  const timerLabel = getCustomExecutionTimerLabel();
+
+  switch (execution.status) {
+    case "running":
+      els.customExecutionStatus.textContent = `自定义脚本执行中：${execution.completedCommands} / ${execution.totalCommands}${
+        execution.currentCommand ? ` · 当前命令 ${execution.currentCommand}` : ""
+      }${timerLabel}`;
+      break;
+    case "paused":
+      els.customExecutionStatus.textContent = `自定义脚本已暂停：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
+      break;
+    case "stopping":
+      els.customExecutionStatus.textContent = `正在中断自定义脚本：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
+      break;
+    case "completed":
+      els.customExecutionStatus.textContent = `自定义脚本已完成：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
+      break;
+    case "stopped":
+      els.customExecutionStatus.textContent = `自定义脚本已中断：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
+      break;
+    case "failed":
+      els.customExecutionStatus.textContent = `自定义脚本失败：${execution.error ?? "请查看执行日志。"}`;
+      break;
+    default:
+      els.customExecutionStatus.textContent = "当前未开始执行。";
+      break;
+  }
+}
+
+function syncCustomUi() {
+  const executionActive = isCustomExecutionActive();
+  const executionPaused = state.custom.execution.status === "paused";
+  const executionRunning = state.custom.execution.status === "running";
+  const hasPort = Boolean(state.selectedPortPath);
+  const controllerReady = isControllerReadyForStudio();
+  const combinedCommands = getCustomCombinedCommands();
+
+  els.customDualPassCheckbox.checked = state.custom.dualPass;
+  els.customBrushSizeSelect.value = String(state.custom.brushSize);
+  els.customCommandsInput.classList.toggle("hidden", state.custom.dualPass);
+  els.customDualInputs.classList.toggle("hidden", !state.custom.dualPass);
+  els.customBrushSizeSelect.disabled = executionActive || state.custom.dualPass;
+  els.customDualPassCheckbox.disabled = executionActive;
+  els.customCommandsInput.disabled = executionActive;
+  els.customPass1Input.disabled = executionActive;
+  els.customPass2Input.disabled = executionActive;
+  els.customPortSelect.disabled = executionActive;
+  els.customPreviewButton.disabled = executionActive;
+  els.customNormalizeButton.disabled = executionActive;
+  els.customClearButton.disabled = executionActive;
+  els.customRefreshPortsButton.disabled = executionActive;
+  els.customExecuteButton.disabled =
+    executionActive || combinedCommands.length === 0 || !hasPort || !controllerReady;
+  els.customExecutePass1Button.disabled =
+    executionActive || !state.custom.dualPass || state.custom.pass1Commands.length === 0 || !hasPort || !controllerReady;
+  els.customExecutePass2Button.disabled =
+    executionActive || !state.custom.dualPass || state.custom.pass2Commands.length === 0 || !hasPort || !controllerReady;
+  els.customPauseButton.disabled = !executionRunning;
+  els.customResumeButton.disabled = !executionPaused;
+  els.customStopButton.disabled = !(executionRunning || executionPaused);
+  els.customCopyButton.disabled = combinedCommands.length === 0;
+  els.customDownloadButton.disabled = combinedCommands.length === 0;
+  els.customCopyPass1Button.disabled = !state.custom.dualPass || state.custom.pass1Commands.length === 0;
+  els.customCopyPass2Button.disabled = !state.custom.dualPass || state.custom.pass2Commands.length === 0;
+  renderCustomExecutionStatus();
 }
 
 function renderOfficialPalettePreview() {
@@ -2578,7 +3085,7 @@ function pickPreferredPortPath() {
 }
 
 function renderPortSelects() {
-  const selects = [els.studioPortSelect, els.firmwarePortSelect, els.controllerPortSelect];
+  const selects = [els.studioPortSelect, els.customPortSelect, els.firmwarePortSelect, els.controllerPortSelect];
 
   selects.forEach((select) => {
     select.innerHTML = "";
@@ -3031,6 +3538,7 @@ async function init() {
   ]);
   renderPortSelects();
   syncStudioUi();
+  syncCustomUi();
   syncFirmwareUi();
   syncControllerUi();
   renderControllerStatus();

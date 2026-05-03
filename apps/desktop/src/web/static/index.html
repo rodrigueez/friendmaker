@@ -66,6 +66,10 @@
             <span class="page-tab-title">刷入固件</span>
             <small class="page-tab-meta">编译、烧录、排错</small>
           </button>
+          <button class="page-tab" data-page-target="custom" type="button">
+            <span class="page-tab-title">自定义命令</span>
+            <small class="page-tab-meta">粘贴、预览、执行</small>
+          </button>
           <button class="page-tab" data-page-target="controller" type="button">
             <span class="page-tab-title">手柄测试</span>
             <small class="page-tab-meta">连接、状态、单步动作</small>
@@ -499,6 +503,134 @@
             </div>
 
             <pre id="log-output" class="log-output" data-empty-log="等待生成命令...">等待生成命令...</pre>
+          </section>
+        </main>
+      </section>
+
+      <section class="page" data-page="custom">
+        <section class="page-intro">
+          <div class="page-intro-copy">
+            <p class="page-kicker">自定义命令</p>
+            <h2>粘贴外部脚本，先回放确认，再直接执行</h2>
+            <p>适合导入外部生成的 Friend Maker 命令，支持单段脚本和双遍 pass1/pass2 脚本。</p>
+          </div>
+          <div class="page-step-row" aria-label="自定义命令步骤">
+            <span class="page-step">1. 粘贴命令</span>
+            <span class="page-step">2. 预览回放</span>
+            <span class="page-step">3. 发送到设备</span>
+          </div>
+        </section>
+
+        <main class="grid">
+          <section class="panel panel-form">
+            <div class="panel-head">
+              <h2>命令输入</h2>
+              <p>每行一条命令。空行和以 # 开头的注释会被忽略。</p>
+            </div>
+
+            <label class="checkbox-card" for="custom-dual-pass-checkbox">
+              <input id="custom-dual-pass-checkbox" type="checkbox" />
+              <span class="checkbox-copy">
+                <strong>双遍模式</strong>
+                <small>pass1 按 brush 3 回放/执行，pass2 按 brush 1 回放/执行。</small>
+              </span>
+            </label>
+
+            <div class="field-grid studio-settings-grid">
+              <label>
+                <span>单段回放画笔</span>
+                <select id="custom-brush-size-select">
+                  <option value="1">1</option>
+                  <option value="3" selected>3</option>
+                  <option value="7">7</option>
+                  <option value="13">13</option>
+                  <option value="19">19</option>
+                  <option value="27">27</option>
+                </select>
+              </label>
+              <label>
+                <span>串口设备</span>
+                <select id="custom-port-select">
+                  <option value="">未检测到串口</option>
+                </select>
+              </label>
+            </div>
+
+            <textarea id="custom-commands-input" class="code-block" rows="14" spellcheck="false" placeholder="CFG INPUT 60 60 1800&#10;BC RESET&#10;BC 0 0 0&#10;C 0&#10;M -10 -10&#10;P&#10;E"></textarea>
+
+            <div id="custom-dual-inputs" class="hidden">
+              <label>
+                <span>pass1 / brush 3</span>
+                <textarea id="custom-pass1-input" class="code-block" rows="10" spellcheck="false"></textarea>
+              </label>
+              <label>
+                <span>pass2 / brush 1</span>
+                <textarea id="custom-pass2-input" class="code-block" rows="10" spellcheck="false"></textarea>
+              </label>
+            </div>
+
+            <div class="action-row slim">
+              <button id="custom-preview-button" class="ghost" type="button">预览回放</button>
+              <button id="custom-normalize-button" class="ghost" type="button">整理命令</button>
+              <button id="custom-clear-button" class="ghost" type="button">清空</button>
+            </div>
+
+            <div class="action-row">
+              <button id="custom-execute-button" class="primary" type="button" disabled>执行脚本</button>
+              <button id="custom-execute-pass1-button" class="ghost" type="button" disabled>执行 pass1</button>
+              <button id="custom-execute-pass2-button" class="ghost" type="button" disabled>执行 pass2</button>
+            </div>
+
+            <div class="action-row slim">
+              <button id="custom-pause-button" class="ghost" type="button" disabled>暂停</button>
+              <button id="custom-resume-button" class="ghost" type="button" disabled>继续</button>
+              <button id="custom-stop-button" class="ghost" type="button" disabled>中断</button>
+            </div>
+
+            <p class="hint" id="custom-execution-status">当前未开始执行。</p>
+          </section>
+
+          <section class="panel panel-preview">
+            <div class="panel-head">
+              <h2>自定义预览</h2>
+              <p>按命令模拟移动、换色和绘制，不会连接设备。</p>
+            </div>
+            <div class="preview-frame">
+              <canvas id="custom-replay-canvas" width="256" height="256" style="width:100%;image-rendering:pixelated;border-radius:8px;"></canvas>
+            </div>
+            <div class="stat-strip">
+              <div class="stat-card">
+                <span>命令</span>
+                <strong id="custom-stat-commands">0</strong>
+              </div>
+              <div class="stat-card">
+                <span>绘制</span>
+                <strong id="custom-stat-drawn">0</strong>
+              </div>
+              <div class="stat-card">
+                <span>模式</span>
+                <strong id="custom-stat-mode">单段</strong>
+              </div>
+            </div>
+
+            <div class="action-row slim">
+              <button id="custom-copy-button" class="ghost" type="button" disabled>复制脚本</button>
+              <button id="custom-download-button" class="ghost" type="button" disabled>下载脚本</button>
+              <button id="custom-copy-pass1-button" class="ghost" type="button" disabled>复制 pass1</button>
+              <button id="custom-copy-pass2-button" class="ghost" type="button" disabled>复制 pass2</button>
+            </div>
+          </section>
+
+          <section class="panel panel-log">
+            <div class="panel-head">
+              <h2>执行日志</h2>
+              <p>这里显示自定义脚本的发送状态和设备返回信息。</p>
+            </div>
+            <div class="action-row slim log-toolbar">
+              <button id="custom-refresh-ports-button" class="ghost" type="button">刷新串口</button>
+              <button id="custom-clear-log-button" class="ghost" type="button">清空日志</button>
+            </div>
+            <pre id="custom-log-output" class="log-output" data-empty-log="等待自定义命令...">等待自定义命令...</pre>
           </section>
         </main>
       </section>
