@@ -76,6 +76,7 @@ const state = {
     resizeMode: "contain",
     mergeSimilarColors: false,
     mergeThreshold: 40,
+    pathStrategy: "scanline",
     dualPassCommands: {
       pass1: [],
       pass2: [],
@@ -204,6 +205,7 @@ const els = {
   colorDistanceSelect: document.getElementById("color-distance-select"),
   resizeModeSelect: document.getElementById("resize-mode-select"),
   mergeSimilarCheckbox: document.getElementById("merge-similar-checkbox"),
+  pathStrategyCheckbox: document.getElementById("path-strategy-checkbox"),
   mergeThresholdRange: document.getElementById("merge-threshold-range"),
   mergeThresholdValue: document.getElementById("merge-threshold-value"),
   brightnessRange: document.getElementById("brightness-range"),
@@ -497,6 +499,12 @@ els.resizeModeSelect.addEventListener("change", () => {
 
 els.mergeSimilarCheckbox.addEventListener("change", () => {
   state.studio.mergeSimilarColors = els.mergeSimilarCheckbox.checked;
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.pathStrategyCheckbox.addEventListener("change", () => {
+  state.studio.pathStrategy = els.pathStrategyCheckbox.checked ? "nearest" : "scanline";
   syncStudioUi();
   scheduleStudioPreviewRefresh();
 });
@@ -804,6 +812,7 @@ function buildStudioGeneratePayload() {
     saturation: state.studio.saturation,
     mergeSimilarColors: state.studio.mergeSimilarColors,
     mergeThreshold: state.studio.mergeThreshold,
+    pathStrategy: state.studio.pathStrategy,
   };
 }
 
@@ -860,6 +869,7 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.saturation = payload.profile.saturation ?? state.studio.saturation;
   state.studio.mergeSimilarColors = payload.profile.mergeSimilarColors ?? state.studio.mergeSimilarColors;
   state.studio.mergeThreshold = payload.profile.mergeThreshold ?? state.studio.mergeThreshold;
+  state.studio.pathStrategy = payload.profile.pathStrategy ?? state.studio.pathStrategy;
   state.studio.dualPassCommands = {
     pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
     pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
@@ -2737,6 +2747,7 @@ function syncStudioUi() {
   els.saturationValue.textContent = String(state.studio.saturation);
   els.mergeSimilarCheckbox.checked = state.studio.mergeSimilarColors;
   els.mergeThresholdRange.value = String(state.studio.mergeThreshold);
+  els.pathStrategyCheckbox.checked = state.studio.pathStrategy === "nearest";
   els.mergeThresholdValue.textContent = String(state.studio.mergeThreshold);
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();

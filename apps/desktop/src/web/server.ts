@@ -485,6 +485,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     saturation?: number;
     mergeSimilarColors?: boolean;
     mergeThreshold?: number;
+    pathStrategy?: "scanline" | "nearest";
   };
 
   if (!body.imageDataUrl) {
@@ -531,6 +532,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     colorDistanceMode: normalizeColorDistanceMode(body.colorDistanceMode),
     mergeSimilarColors: body.mergeSimilarColors === true,
     mergeThreshold: Number(body.mergeThreshold ?? 40),
+    pathStrategy: body.pathStrategy === "nearest" ? ("nearest" as const) : ("scanline" as const),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
   const useDualPass = body.dualPass === true && profile.colorMode === "official";
@@ -567,6 +569,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       saturation: generationOptions.saturation,
       mergeSimilarColors: generationOptions.mergeSimilarColors,
       mergeThreshold: generationOptions.mergeThreshold,
+      pathStrategy: generationOptions.pathStrategy,
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,
