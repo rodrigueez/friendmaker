@@ -493,6 +493,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     saturation?: number;
     mergeSimilarColors?: boolean;
     mergeThreshold?: number;
+    pathStrategy?: "scanline" | "nearest";
   };
 
   if (!body.imageDataUrl) {
@@ -539,6 +540,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     colorDistanceMode: normalizeColorDistanceMode(body.colorDistanceMode),
     mergeSimilarColors: body.mergeSimilarColors === true,
     mergeThreshold: normalizeMergeThreshold(body.mergeThreshold),
+    pathStrategy: body.pathStrategy === "nearest" ? ("nearest" as const) : ("scanline" as const),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
   const plan = await generateDrawPlan(imageSource, profile, body.previewScale ?? 12, generationOptions);
@@ -569,6 +571,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       saturation: generationOptions.saturation,
       mergeSimilarColors: generationOptions.mergeSimilarColors,
       mergeThreshold: generationOptions.mergeThreshold,
+      pathStrategy: generationOptions.pathStrategy,
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,
@@ -1156,11 +1159,6 @@ async function handleRequest(request: IncomingMessage, response: ServerResponse)
 
     if (request.method === "GET" && url.pathname === "/styles.css") {
       await serveStatic(response, "styles.css");
-      return;
-    }
-
-    if (request.method === "GET" && url.pathname === "/tomodachi-palette.html") {
-      await serveStatic(response, "tomodachi-palette.html");
       return;
     }
 

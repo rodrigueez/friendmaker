@@ -196,6 +196,7 @@ const els = {
   colorDistanceSelect: document.getElementById("color-distance-select"),
   resizeModeSelect: document.getElementById("resize-mode-select"),
   mergeSimilarCheckbox: document.getElementById("merge-similar-checkbox"),
+  pathStrategyCheckbox: document.getElementById("path-strategy-checkbox"),
   mergeThresholdRange: document.getElementById("merge-threshold-range"),
   mergeThresholdValue: document.getElementById("merge-threshold-value"),
   brightnessRange: document.getElementById("brightness-range"),
@@ -465,6 +466,12 @@ els.mergeSimilarCheckbox.addEventListener("change", () => {
   scheduleStudioPreviewRefresh();
 });
 
+els.pathStrategyCheckbox.addEventListener("change", () => {
+  state.studio.pathStrategy = els.pathStrategyCheckbox.checked ? "nearest" : "scanline";
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
 els.mergeThresholdRange.addEventListener("input", () => {
   state.studio.mergeThreshold = normalizeStudioNumericValue(els.mergeThresholdRange.value, state.studio.mergeThreshold, {
     min: 0,
@@ -719,6 +726,7 @@ function buildStudioGeneratePayload() {
     saturation: state.studio.saturation,
     mergeSimilarColors: state.studio.mergeSimilarColors,
     mergeThreshold: state.studio.mergeThreshold,
+    pathStrategy: state.studio.pathStrategy,
   };
 }
 
@@ -2608,6 +2616,7 @@ function syncStudioUi() {
   els.saturationValue.textContent = String(state.studio.saturation);
   els.mergeSimilarCheckbox.checked = state.studio.mergeSimilarColors;
   els.mergeThresholdRange.value = String(state.studio.mergeThreshold);
+  els.pathStrategyCheckbox.checked = state.studio.pathStrategy === "nearest";
   els.mergeThresholdValue.textContent = String(state.studio.mergeThreshold);
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();

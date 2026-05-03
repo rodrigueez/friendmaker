@@ -28,7 +28,7 @@
           </p>
           <p class="subcopy">
             推荐顺序是先刷固件，再做手柄测试，最后回到“脚本生成”页导入图片并先点“仅生成命令”。手柄测试未通过时，不允许开始正式绘制。开始前请确认
-            Switch 处于初始绘画页面、画笔停在画布中心、侧边色彩槽保持默认；“自定义多色（自动量化）”已开放实验入口，但稳定性仍弱于“官方色绘制”。建议首次先用简单图和大画笔测试，开始绘制后不要再操作手柄或触碰屏幕，以免错位。
+            Switch 处于初始绘画页面、画笔停在画布中心、侧边色彩槽保持默认；”自定义多色（自动量化）”已开放实验入口，但稳定性仍弱于”官方色绘制”。建议首次先用简单图和大画笔测试，开始绘制后不要再操作手柄或触碰屏幕，以免错位。
           </p>
         </div>
         <div class="hero-side">
@@ -228,6 +228,14 @@
                 <span class="checkbox-copy">
                   <strong>合并同类色</strong>
                   <small>将官方色盘中颜色相近的色块合并，减少换色次数以缩短绘制时间。</small>
+                </span>
+              </label>
+
+              <label class="checkbox-card" for="path-strategy-checkbox">
+                <input id="path-strategy-checkbox" type="checkbox" />
+                <span class="checkbox-copy">
+                  <strong>最近邻路径（实验）</strong>
+                  <small>画完一点后优先去附近同色像素，替代默认的蛇形扫描排序。</small>
                 </span>
               </label>
             </div>
