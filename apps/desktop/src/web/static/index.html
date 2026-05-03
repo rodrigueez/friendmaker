@@ -177,6 +177,14 @@
                   <option value="128">128 色</option>
                 </select>
               </label>
+
+              <label class="checkbox-card" for="dual-pass-checkbox">
+                <input id="dual-pass-checkbox" type="checkbox" />
+                <span class="checkbox-copy">
+                  <strong>双遍模式</strong>
+                  <small>官方色绘制时先生成 brush 3 粗绘，再生成 brush 1 修正。</small>
+                </span>
+              </label>
             </div>
 
             <label class="range-row">
@@ -265,6 +273,11 @@
               <button id="execute-button" class="ghost" disabled>执行现有脚本</button>
             </div>
 
+            <div id="dual-pass-execution-row" class="action-row slim hidden">
+              <button id="execute-pass1-button" class="ghost" type="button" disabled>跑粗 brush 3</button>
+              <button id="execute-pass2-button" class="ghost" type="button" disabled>跑细 brush 1</button>
+            </div>
+
             <div class="action-row slim">
               <button id="pause-execution-button" class="ghost" type="button" disabled>暂停绘制</button>
               <button id="resume-execution-button" class="ghost" type="button" disabled>继续绘制</button>
@@ -307,6 +320,19 @@
                 <img id="preview-image" alt="生成预览" />
                 <div class="preview-guide" aria-hidden="true"></div>
                 <div class="empty-state" id="preview-empty">生成后这里会显示像素预览。</div>
+              </div>
+            </div>
+
+            <div id="dual-pass-preview-row" class="preview-meta-strip hidden">
+              <div class="preview-meta-card">
+                <span>3 像素预览</span>
+                <img id="dual-pass1-preview-image" alt="brush 3 粗绘预览" style="width:100%;image-rendering:pixelated;border-radius:8px;" />
+                <small id="dual-pass1-preview-meta">-</small>
+              </div>
+              <div class="preview-meta-card">
+                <span>1 像素修正后</span>
+                <img id="dual-pass2-preview-image" alt="brush 1 修正后预览" style="width:100%;image-rendering:pixelated;border-radius:8px;" />
+                <small id="dual-pass2-preview-meta">-</small>
               </div>
             </div>
 

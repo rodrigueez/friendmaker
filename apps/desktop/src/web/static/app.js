@@ -63,6 +63,11 @@ const state = {
     colorMode: "mono",
     colorCount: 32,
     removeBackground: false,
+    dualPass: false,
+    dualPassCommands: {
+      pass1: [],
+      pass2: [],
+    },
     usedColorIndexes: [],
     officialPalette: {
       rows: 0,
@@ -84,6 +89,14 @@ const state = {
       finishedAt: null,
       error: null,
       lineCount: 0,
+    },
+    executionClock: {
+      id: null,
+      elapsedMs: 0,
+      runningSince: null,
+      avgMsPerCommand: null,
+      lastDone: 0,
+      lastSampleElapsedMs: 0,
     },
   },
   firmware: {
@@ -141,6 +154,7 @@ const els = {
   brushSizeSelect: document.getElementById("brush-size-select"),
   colorModeSelect: document.getElementById("color-mode-select"),
   colorCountSelect: document.getElementById("color-count-select"),
+  dualPassCheckbox: document.getElementById("dual-pass-checkbox"),
   thresholdLabel: document.getElementById("threshold-label"),
   thresholdRange: document.getElementById("threshold-range"),
   thresholdValue: document.getElementById("threshold-value"),
@@ -156,6 +170,9 @@ const els = {
   quickStartButton: document.getElementById("quick-start-button"),
   generateButton: document.getElementById("generate-button"),
   executeButton: document.getElementById("execute-button"),
+  dualPassExecutionRow: document.getElementById("dual-pass-execution-row"),
+  executePass1Button: document.getElementById("execute-pass1-button"),
+  executePass2Button: document.getElementById("execute-pass2-button"),
   pauseExecutionButton: document.getElementById("pause-execution-button"),
   resumeExecutionButton: document.getElementById("resume-execution-button"),
   stopExecutionButton: document.getElementById("stop-execution-button"),
@@ -166,6 +183,11 @@ const els = {
   previewCanvas: document.getElementById("preview-canvas"),
   previewImage: document.getElementById("preview-image"),
   previewEmpty: document.getElementById("preview-empty"),
+  dualPassPreviewRow: document.getElementById("dual-pass-preview-row"),
+  dualPass1PreviewImage: document.getElementById("dual-pass1-preview-image"),
+  dualPass2PreviewImage: document.getElementById("dual-pass2-preview-image"),
+  dualPass1PreviewMeta: document.getElementById("dual-pass1-preview-meta"),
+  dualPass2PreviewMeta: document.getElementById("dual-pass2-preview-meta"),
   officialPalettePanel: document.getElementById("official-palette-panel"),
   officialPaletteSummary: document.getElementById("official-palette-summary"),
   officialPaletteGrid: document.getElementById("official-palette-grid"),
@@ -315,6 +337,9 @@ els.offsetYInput.addEventListener("blur", () => {
 els.colorModeSelect.addEventListener("change", () => {
   const nextMode = els.colorModeSelect.value;
   state.studio.colorMode = nextMode === "official" ? "official" : "mono";
+  if (state.studio.colorMode !== "official") {
+    state.studio.dualPass = false;
+  }
   syncStudioColorCountOptions();
   syncStudioUi();
   scheduleStudioPreviewRefresh();
@@ -322,6 +347,12 @@ els.colorModeSelect.addEventListener("change", () => {
 
 els.colorCountSelect.addEventListener("change", () => {
   state.studio.colorCount = Number(els.colorCountSelect.value || state.studio.colorCount);
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.dualPassCheckbox.addEventListener("change", () => {
+  state.studio.dualPass = els.dualPassCheckbox.checked;
   syncStudioUi();
   scheduleStudioPreviewRefresh();
 });
@@ -416,6 +447,14 @@ els.quickStartButton.addEventListener("click", async () => {
     return;
   }
 
+  if (state.studio.dualPass && state.studio.dualPassCommands.pass1.length > 0) {
+    appendLog(
+      els.studioLogOutput,
+      "双遍模式已生成：请先点“跑粗 brush 3”，在游戏里切到 brush 1 后再点“跑细 brush 1”。",
+    );
+    return;
+  }
+
   await executeStudioCommands({
     logPrefix: `开始发送到设备：${state.selectedPortPath}`,
   });
@@ -430,6 +469,20 @@ els.generateButton.addEventListener("click", async () => {
 els.executeButton.addEventListener("click", async () => {
   await executeStudioCommands({
     logPrefix: `开始发送到设备：${state.selectedPortPath}`,
+  });
+});
+
+els.executePass1Button.addEventListener("click", async () => {
+  await executeStudioCommands({
+    logPrefix: `开始发送 brush 3 粗绘脚本到设备：${state.selectedPortPath}`,
+    commands: state.studio.dualPassCommands.pass1,
+  });
+});
+
+els.executePass2Button.addEventListener("click", async () => {
+  await executeStudioCommands({
+    logPrefix: `开始发送 brush 1 修正脚本到设备：${state.selectedPortPath}`,
+    commands: state.studio.dualPassCommands.pass2,
   });
 });
 
@@ -494,6 +547,7 @@ function buildStudioGeneratePayload() {
     threshold: Number(els.thresholdRange.value),
     previewScale: 12,
     removeBackground: state.studio.removeBackground,
+    dualPass: state.studio.dualPass,
   };
 }
 
@@ -538,6 +592,11 @@ function applyGeneratedStudioPayload(payload) {
     payload.profile.colorMode === "official" ? "official" : "mono";
   state.studio.colorCount = payload.profile.colorCount ?? state.studio.colorCount;
   state.studio.removeBackground = payload.profile.removeBackground === true;
+  state.studio.dualPass = payload.profile.dualPass === true;
+  state.studio.dualPassCommands = {
+    pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
+    pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
+  };
 
   els.commandsOutput.value = payload.commands.join("\n");
   els.previewImage.src = payload.previewDataUrl;
@@ -552,8 +611,35 @@ function applyGeneratedStudioPayload(payload) {
     ? `${payload.stats.commandCount} · L ${payload.stats.pathStats.lineRunCount}`
     : String(payload.stats.commandCount);
   els.statRuntime.textContent = payload.stats.estimatedRuntimeLabel;
+  renderDualPassPayload(payload);
   void updatePreviewBounds(payload);
   renderOfficialPalettePreview();
+}
+
+function renderDualPassPayload(payload) {
+  const dual = payload?.dualPass;
+  const hasDual =
+    payload?.profile?.dualPass === true &&
+    dual &&
+    Array.isArray(dual.pass1Commands) &&
+    Array.isArray(dual.pass2Commands);
+
+  els.dualPassPreviewRow.classList.toggle("hidden", !hasDual);
+
+  if (!hasDual) {
+    els.dualPass1PreviewImage.removeAttribute("src");
+    els.dualPass2PreviewImage.removeAttribute("src");
+    els.dualPass1PreviewMeta.textContent = "-";
+    els.dualPass2PreviewMeta.textContent = "-";
+    return;
+  }
+
+  els.dualPass1PreviewImage.src = dual.pass1PreviewDataUrl;
+  els.dualPass2PreviewImage.src = dual.correctedPreviewDataUrl;
+  els.dualPass1PreviewMeta.textContent =
+    `粗绘 ${dual.pass1Stats.commandCount} 条命令 · ${dual.pass1Stats.estimatedRuntimeLabel}`;
+  els.dualPass2PreviewMeta.textContent =
+    `修正 ${dual.pass2Stats.commandCount} 条命令 · ${dual.pass2Stats.estimatedRuntimeLabel}`;
 }
 
 function renderPreviewBounds(profile, imageBounds) {
@@ -693,8 +779,8 @@ async function refreshStudioPreview() {
   }
 }
 
-async function executeStudioCommands({ logPrefix }) {
-  if (!state.commands.length) {
+async function executeStudioCommands({ logPrefix, commands = state.commands }) {
+  if (!commands.length) {
     appendLog(els.studioLogOutput, "没有可执行的命令。");
     return false;
   }
@@ -720,7 +806,7 @@ async function executeStudioCommands({ logPrefix }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         target: "serial",
-        commands: state.commands,
+        commands,
         portPath: state.selectedPortPath,
         baudRate: state.studio.profile.baudRate,
         ackTimeoutMs: state.studio.profile.ackTimeoutMs,
@@ -1220,6 +1306,7 @@ function setStudioBusy(isBusy) {
   els.offsetYRange.disabled = isBusy;
   els.sizeSelect.disabled = isBusy;
   els.brushSizeSelect.disabled = isBusy;
+  els.dualPassCheckbox.disabled = isBusy;
   els.copyButton.disabled = isBusy || state.commands.length === 0;
   els.downloadButton.disabled = isBusy || state.commands.length === 0;
   syncStudioUi();
@@ -1227,6 +1314,111 @@ function setStudioBusy(isBusy) {
 
 function isStudioExecutionActive() {
   return ["running", "paused", "stopping"].includes(state.studio.execution.status);
+}
+
+function formatStudioClock(ms) {
+  if (!Number.isFinite(ms) || ms < 0) {
+    return "--";
+  }
+
+  const totalSeconds = Math.floor(ms / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function pauseStudioExecutionClock() {
+  const clock = state.studio.executionClock;
+
+  if (clock.runningSince !== null) {
+    clock.elapsedMs += performance.now() - clock.runningSince;
+    clock.runningSince = null;
+  }
+}
+
+function resumeStudioExecutionClock() {
+  const clock = state.studio.executionClock;
+
+  if (clock.runningSince === null) {
+    clock.runningSince = performance.now();
+  }
+}
+
+function getStudioExecutionElapsedMs() {
+  const clock = state.studio.executionClock;
+
+  if (clock.runningSince === null) {
+    return clock.elapsedMs;
+  }
+
+  return clock.elapsedMs + performance.now() - clock.runningSince;
+}
+
+function syncStudioExecutionClock(execution, isNewExecution) {
+  const clock = state.studio.executionClock;
+
+  if (isNewExecution) {
+    state.studio.executionClock = {
+      id: execution.id,
+      elapsedMs: 0,
+      runningSince: execution.status === "running" ? performance.now() : null,
+      avgMsPerCommand: null,
+      lastDone: execution.completedCommands,
+      lastSampleElapsedMs: 0,
+    };
+    return;
+  }
+
+  if (execution.status === "running") {
+    resumeStudioExecutionClock();
+  } else {
+    pauseStudioExecutionClock();
+  }
+
+  const elapsed = getStudioExecutionElapsedMs();
+  const deltaDone = execution.completedCommands - clock.lastDone;
+  const deltaMs = elapsed - clock.lastSampleElapsedMs;
+
+  if (execution.status === "running" && deltaDone > 0 && deltaMs > 0) {
+    const sampleMsPerCommand = deltaMs / deltaDone;
+    clock.avgMsPerCommand =
+      clock.avgMsPerCommand === null
+        ? sampleMsPerCommand
+        : clock.avgMsPerCommand * 0.65 + sampleMsPerCommand * 0.35;
+    clock.lastDone = execution.completedCommands;
+    clock.lastSampleElapsedMs = elapsed;
+  } else if (execution.completedCommands < clock.lastDone) {
+    clock.lastDone = execution.completedCommands;
+    clock.lastSampleElapsedMs = elapsed;
+  }
+}
+
+function getStudioExecutionTimerLabel() {
+  const execution = state.studio.execution;
+
+  if (!execution.id || execution.totalCommands <= 0) {
+    return "";
+  }
+
+  const elapsed = getStudioExecutionElapsedMs();
+  const remainingCommands = Math.max(0, execution.totalCommands - execution.completedCommands);
+  let remaining = "--";
+
+  if (remainingCommands === 0) {
+    remaining = "0:00";
+  } else if (state.studio.executionClock.avgMsPerCommand !== null) {
+    remaining = formatStudioClock(state.studio.executionClock.avgMsPerCommand * remainingCommands);
+  } else if (execution.completedCommands > 0) {
+    remaining = formatStudioClock((elapsed / execution.completedCommands) * remainingCommands);
+  }
+
+  return ` · 已执行 ${formatStudioClock(elapsed)} · 预计剩余 ${remaining}`;
 }
 
 function applyStudioExecutionSnapshot(snapshot) {
@@ -1270,6 +1462,7 @@ function applyStudioExecutionSnapshot(snapshot) {
         : state.studio.execution.error,
     lineCount: nextLineCount,
   };
+  syncStudioExecutionClock(state.studio.execution, isNewExecution);
 
   newLines.forEach((line) => appendLog(els.studioLogOutput, `[device] ${line}`));
 
@@ -1593,24 +1786,25 @@ function renderStudioConnectionStatus() {
 
 function renderStudioExecutionStatus() {
   const execution = state.studio.execution;
+  const timerLabel = getStudioExecutionTimerLabel();
 
   switch (execution.status) {
     case "running":
       els.studioExecutionStatus.textContent = `绘制进行中：${execution.completedCommands} / ${execution.totalCommands}${
         execution.currentCommand ? ` · 当前命令 ${execution.currentCommand}` : ""
-      }`;
+      }${timerLabel}`;
       break;
     case "paused":
-      els.studioExecutionStatus.textContent = `绘制已暂停：${execution.completedCommands} / ${execution.totalCommands}`;
+      els.studioExecutionStatus.textContent = `绘制已暂停：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
       break;
     case "stopping":
-      els.studioExecutionStatus.textContent = `正在中断绘制：${execution.completedCommands} / ${execution.totalCommands}`;
+      els.studioExecutionStatus.textContent = `正在中断绘制：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
       break;
     case "completed":
-      els.studioExecutionStatus.textContent = `绘制已完成：${execution.completedCommands} / ${execution.totalCommands}`;
+      els.studioExecutionStatus.textContent = `绘制已完成：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
       break;
     case "stopped":
-      els.studioExecutionStatus.textContent = `绘制已中断：${execution.completedCommands} / ${execution.totalCommands}`;
+      els.studioExecutionStatus.textContent = `绘制已中断：${execution.completedCommands} / ${execution.totalCommands}${timerLabel}`;
       break;
     case "failed":
       els.studioExecutionStatus.textContent = `绘制失败：${execution.error ?? "请查看执行日志。"}`;
@@ -1712,6 +1906,7 @@ function syncStudioUi() {
   els.previewGuideSelect.value = state.studio.previewGuideMode;
   els.previewCanvas.dataset.guide = state.studio.previewGuideMode;
   els.colorModeSelect.value = state.studio.colorMode;
+  els.dualPassCheckbox.checked = state.studio.dualPass;
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();
   const backgroundHint = state.studio.removeBackground
@@ -1738,6 +1933,8 @@ function syncStudioUi() {
   els.offsetYRange.disabled = state.studio.busy || executionActive;
   els.offsetYInput.disabled = state.studio.busy || executionActive;
   els.colorModeSelect.disabled = state.studio.busy || executionActive;
+  els.dualPassCheckbox.disabled =
+    state.studio.busy || executionActive || state.studio.colorMode !== "official";
   els.autoRemoveBackgroundCheckbox.disabled = state.studio.busy || executionActive;
   els.previewGuideSelect.disabled = false;
   els.colorCountSelect.disabled =
@@ -1747,6 +1944,7 @@ function syncStudioUi() {
   els.thresholdRange.disabled = state.studio.busy || executionActive;
   els.quickStartButton.textContent = "一键开始绘制";
   els.executeButton.textContent = "执行现有脚本";
+  els.dualPassExecutionRow.classList.toggle("hidden", !state.studio.dualPass);
   els.quickStartButton.disabled =
     state.studio.busy ||
     executionActive ||
@@ -1756,7 +1954,20 @@ function syncStudioUi() {
   els.executeButton.disabled =
     state.studio.busy ||
     executionActive ||
+    state.studio.dualPass ||
     state.commands.length === 0 ||
+    !hasPort ||
+    !controllerReady;
+  els.executePass1Button.disabled =
+    state.studio.busy ||
+    executionActive ||
+    state.studio.dualPassCommands.pass1.length === 0 ||
+    !hasPort ||
+    !controllerReady;
+  els.executePass2Button.disabled =
+    state.studio.busy ||
+    executionActive ||
+    state.studio.dualPassCommands.pass2.length === 0 ||
     !hasPort ||
     !controllerReady;
   els.generateButton.disabled = state.studio.busy || executionActive;
