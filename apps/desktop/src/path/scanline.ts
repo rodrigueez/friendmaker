@@ -16,10 +16,8 @@ import {
   lineCommand,
   moveCommand,
   paletteConfigCommand,
-  setBrushCommand,
   type DrawCommand,
 } from "../protocol/commands.js";
-import { createInitialBrushMenuState, expandSetBrush, expandSetTool } from "../protocol/serializer.js";
 import { DEFAULT_SAFE_INPUT_TIMING } from "../protocol/timing.js";
 
 export type PathStrategy = "scanline" | "nearest";
@@ -642,7 +640,6 @@ export function generateScanlineCommands(
       profile.homeDuration || DEFAULT_SAFE_INPUT_TIMING.homeMs,
     ),
   );
-  commands.push(setBrushCommand(profile.brushSize, profile.brushShape));
 
   if (shouldStartFromCanvasCenter(profile)) {
     current = {
@@ -735,23 +732,6 @@ export function estimateRuntimeMs(commands: DrawCommand[], profile: DrawingProfi
     inputDelayMs: profile.inputDelay,
     homeMs: profile.homeDuration,
   };
-  const brushState = createInitialBrushMenuState();
-
-  function estimateSerializedInput(command: string): number {
-    if (command.startsWith("M ")) {
-      const [, dxText, dyText] = command.match(/^M\s+(-?\d+)\s+(-?\d+)$/u) ?? [];
-      const dx = Number.parseInt(dxText ?? "0", 10);
-      const dy = Number.parseInt(dyText ?? "0", 10);
-
-      return (Math.abs(dx) + Math.abs(dy)) * (timing.buttonPressMs + timing.inputDelayMs);
-    }
-
-    if (command === "A" || command === "B" || command === "X" || command === "Y") {
-      return timing.buttonPressMs + timing.inputDelayMs;
-    }
-
-    return 0;
-  }
 
   return commands.reduce((total, command) => {
     switch (command.type) {
@@ -787,16 +767,6 @@ export function estimateRuntimeMs(commands: DrawCommand[], profile: DrawingProfi
         return total + profile.colorChangeDuration * 4;
       case "basicPaletteReset":
         return total + timing.inputDelayMs;
-      case "setBrush":
-        return total + expandSetBrush(brushState, command).reduce(
-          (subtotal, serializedCommand) => subtotal + estimateSerializedInput(serializedCommand),
-          0,
-        );
-      case "setTool":
-        return total + expandSetTool(brushState, command.tool).reduce(
-          (subtotal, serializedCommand) => subtotal + estimateSerializedInput(serializedCommand),
-          0,
-        );
       case "wait":
         return total + command.ms;
       case "pause":

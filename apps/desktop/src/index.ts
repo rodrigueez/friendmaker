@@ -140,7 +140,7 @@ async function main(): Promise<void> {
       [
         `Profile: ${profile.profileName}`,
         `Canvas: ${profile.canvasWidth}x${profile.canvasHeight}`,
-        `Brush: ${profile.brushShape} ${profile.brushSize}`,
+        `Brush: ${profile.brushSize}`,
         `Mode: ${profile.colorMode}`,
         `Palette: ${profile.palette.join(", ")}`,
         `Used colors: ${plan.usedColorIndexes.join(", ")}`,
