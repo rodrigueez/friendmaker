@@ -81,6 +81,7 @@ const state = {
       pass2: [],
     },
     usedColorIndexes: [],
+    colorCounts: {},
     officialPalette: {
       rows: 0,
       cols: 0,
@@ -831,6 +832,7 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.usedColorIndexes = Array.isArray(payload.stats.usedColorIndexes)
     ? payload.stats.usedColorIndexes
     : [];
+  state.studio.colorCounts = payload.stats.colorCounts ?? {};
   state.studio.profile = {
     baudRate: payload.profile.baudRate ?? 115200,
     ackTimeoutMs: payload.profile.ackTimeoutMs ?? 5000,
@@ -2637,11 +2639,14 @@ function renderOfficialPalettePreview() {
 
   els.officialPaletteGrid.innerHTML = "";
 
+  const colorCounts = state.studio.colorCounts ?? {};
+
   palette.grid.forEach((rowColors, rowIndex) => {
     rowColors.forEach((colorHex, colIndex) => {
       const cell = document.createElement("div");
       const flatIndex = rowIndex * palette.cols + colIndex;
-      cell.className = `official-palette-cell${usedIndexes.has(flatIndex) ? " used" : ""}`;
+      const isUsed = usedIndexes.has(flatIndex);
+      cell.className = `official-palette-cell${isUsed ? " used" : ""}`;
 
       const swatch = document.createElement("div");
       swatch.className = "official-palette-swatch";
@@ -2654,11 +2659,22 @@ function renderOfficialPalettePreview() {
       coord.className = "official-palette-coord";
       coord.textContent = `R${rowIndex} · C${colIndex}`;
 
+      meta.append(coord);
+
+      if (isUsed) {
+        const count = document.createElement("span");
+        count.className = "official-palette-count";
+        const n = colorCounts[flatIndex] ?? 0;
+        count.textContent = n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+        count.title = `${n} px`;
+        meta.append(count);
+      }
+
       const hex = document.createElement("span");
       hex.className = "official-palette-hex";
       hex.textContent = colorHex;
 
-      meta.append(coord, hex);
+      meta.append(hex);
       cell.append(swatch, meta);
       els.officialPaletteGrid.appendChild(cell);
     });

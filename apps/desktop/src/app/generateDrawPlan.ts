@@ -19,6 +19,7 @@ export interface DrawPlan {
   commands: string[];
   pixelMap: PixelMap;
   usedColorIndexes: number[];
+  colorCounts: Record<number, number>;
   paletteHexes: string[];
   totalPixels: number;
   estimatedRuntimeMs: number;
@@ -60,7 +61,7 @@ export async function generateDrawPlan(
     mergeThreshold?: number;
   },
 ): Promise<DrawPlan> {
-  const { pixelMap, usedColorIndexes } = await pixelizeImage(imageSource, profile, options);
+  const { pixelMap, usedColorIndexes, colorCounts } = await pixelizeImage(imageSource, profile, options);
   const previewPng = await renderPreviewToBuffer(pixelMap, profile, previewScale);
   const drawCommands = generateScanlineCommands(pixelMap, profile);
   const imageBounds = calculateCanvasBounds(pixelMap, profile);
@@ -82,6 +83,7 @@ export async function generateDrawPlan(
     commands: serializeCommands(drawCommands),
     pixelMap,
     usedColorIndexes,
+    colorCounts,
     paletteHexes,
     totalPixels: pixelMap.length * (pixelMap[0]?.length ?? 0),
     estimatedRuntimeMs: estimateRuntimeMs(drawCommands, profile),
@@ -190,7 +192,7 @@ export async function generateDualPassDrawPlan(
   const coarseProfile = cloneProfileWithBrushSize(profile, 3);
   const fineProfile = cloneProfileWithBrushSize(profile, 1);
   const pass1 = await generateDrawPlan(imageSource, coarseProfile, previewScale, options);
-  const { pixelMap: targetMap, usedColorIndexes } = await pixelizeImage(imageSource, fineProfile, options);
+  const { pixelMap: targetMap, usedColorIndexes, colorCounts } = await pixelizeImage(imageSource, fineProfile, options);
   const correctionMap = buildDualPassCorrectionMap(targetMap, pass1.pixelMap);
   const correctedPreviewMap = buildDualPassCorrectedPreviewMap(targetMap, pass1.pixelMap);
   const pass2Commands = generateScanlineCommands(correctionMap, fineProfile);
@@ -201,6 +203,7 @@ export async function generateDualPassDrawPlan(
     commands: serializeCommands(pass2Commands),
     pixelMap: correctionMap,
     usedColorIndexes,
+    colorCounts,
     paletteHexes: pass1.paletteHexes,
     totalPixels: correctionMap.flatMap((row) => row.filter((pixel) => pixel.alpha > 0)).length,
     estimatedRuntimeMs: estimateRuntimeMs(pass2Commands, fineProfile),
@@ -214,6 +217,7 @@ export async function generateDualPassDrawPlan(
     commands: [...pass1.commands, ...pass2.commands],
     pixelMap: correctedPreviewMap,
     usedColorIndexes,
+    colorCounts,
     paletteHexes: pass1.paletteHexes,
     totalPixels: targetMap.flatMap((row) => row.filter((pixel) => pixel.alpha > 0)).length,
     estimatedRuntimeMs: pass1.estimatedRuntimeMs + pass2.estimatedRuntimeMs,

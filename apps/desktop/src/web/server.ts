@@ -570,6 +570,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,
+      colorCounts: plan.colorCounts,
       totalPixels: plan.totalPixels,
       commandCount: plan.commands.length,
       estimatedRuntimeMs: plan.estimatedRuntimeMs,

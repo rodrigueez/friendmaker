@@ -258,9 +258,19 @@ export async function pixelizeImage(
     );
   }
 
+  const colorCounts: Record<number, number> = {};
+  for (const row of pixelMap) {
+    for (const pixel of row) {
+      if (pixel.alpha > 0 && pixel.colorIndex >= 0) {
+        colorCounts[pixel.colorIndex] = (colorCounts[pixel.colorIndex] || 0) + 1;
+      }
+    }
+  }
+
   return {
     pixelMap,
     usedColorIndexes,
+    colorCounts,
   };
 }
 

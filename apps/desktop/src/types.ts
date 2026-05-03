@@ -59,6 +59,7 @@ export interface DrawingProfile {
 export interface PixelizationResult {
   pixelMap: PixelMap;
   usedColorIndexes: number[];
+  colorCounts: Record<number, number>;
 }
 
 export interface CanvasBounds {
