@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 import sharp from "sharp";
 
-import { calculateCanvasBounds } from "../src/app/generateDrawPlan.js";
+import { calculateCanvasBounds, generateDualPassDrawPlan } from "../src/app/generateDrawPlan.js";
 import { createBrushGrid, gridCellBounds, gridCellToCanvasCenter } from "../src/brushGrid.js";
 import { pixelizeImage } from "../src/image/pixelize.js";
 import { renderPreviewToBuffer } from "../src/image/renderPreview.js";
@@ -33,6 +33,7 @@ function makeProfile(overrides: Partial<DrawingProfile> = {}): DrawingProfile {
     monoThreshold: 128,
     palette: ["#000000", "#ffffff"],
     brushSize: 1,
+    brushShape: "square",
     startCursor: "center",
     startTool: "pen",
     startColorIndex: 0,
@@ -109,6 +110,33 @@ async function transparentPng(width: number, height: number): Promise<Buffer> {
     .toBuffer();
 }
 
+async function pngWithOpaquePixels(width: number, height: number, pixels: Array<{ x: number; y: number }>): Promise<Buffer> {
+  const filledKeys = new Set(pixels.map((pixel) => `${pixel.x},${pixel.y}`));
+  const data = Buffer.alloc(width * height * 4);
+
+  for (let y = 0; y < height; y += 1) {
+    for (let x = 0; x < width; x += 1) {
+      const offset = (y * width + x) * 4;
+      const isFilled = filledKeys.has(`${x},${y}`);
+
+      data[offset] = 0;
+      data[offset + 1] = 0;
+      data[offset + 2] = 0;
+      data[offset + 3] = isFilled ? 255 : 0;
+    }
+  }
+
+  return sharp(data, {
+    raw: {
+      width,
+      height,
+      channels: 4,
+    },
+  })
+    .png()
+    .toBuffer();
+}
+
 test("BrushGrid keeps pixelize, preview, bounds, and centers aligned", async () => {
   const brushSizes: BrushSize[] = [1, 3, 7, 13, 19, 27];
   const blankImage = await transparentPng(256, 256);
@@ -161,6 +189,48 @@ test("a 200 pixel horizontal line becomes one L run", () => {
 
   assert.equal(commands.filter((command) => command.startsWith("L ")).length, 1);
   assert.equal(commands.includes("L 199 0"), true);
+});
+
+test("scanline setup selects the profile brush before drawing", () => {
+  const profile = makeProfile({ brushSize: 3, brushShape: "square" });
+  const commands = serializeCommands(generateScanlineCommands(makePixelMap(1, 1, []), profile));
+
+  assert.deepEqual(commands.slice(0, 6), ["CFG INPUT 100 100 1800", "X", "X", "M -1 1", "A", "B"]);
+});
+
+test("dual pass erases coarse square overdraw back to transparent pixels", async () => {
+  const profile = makeProfile({
+    canvasWidth: 3,
+    canvasHeight: 3,
+    colorMode: "official",
+    colorCount: 2,
+    brushSize: 1,
+    resizeMode: "stretch",
+  });
+  const image = await pngWithOpaquePixels(3, 3, [{ x: 1, y: 1 }]);
+  const plan = await generateDualPassDrawPlan(image, profile, 1);
+
+  assert.equal(plan.pass2.totalPixels, 8);
+  assert.deepEqual(plan.pass2.commands.slice(0, 10), [
+    "CFG INPUT 100 100 1800",
+    "X",
+    "M 1 0",
+    "X",
+    "B",
+    "X",
+    "X",
+    "M -1 1",
+    "A",
+    "B",
+  ]);
+  assert.deepEqual(plan.imageBounds, {
+    x: 1,
+    y: 1,
+    width: 1,
+    height: 1,
+    maxX: 1,
+    maxY: 1,
+  });
 });
 
 test("large brush centered blocks use grid origin instead of top-left bias", async () => {

@@ -6,6 +6,7 @@ export type ControllerButton = "A" | "B" | "X" | "Y";
 export type StartCursor = "center" | "top-left";
 export type DrawingTool = "pen" | "eraser" | "fill" | "stamp" | "text" | "shape";
 export type BrushSize = 1 | 3 | 7 | 13 | 19 | 27;
+export type BrushShape = "round" | "square";
 
 export interface RgbColor {
   r: number;
@@ -49,6 +50,7 @@ export interface DrawingProfile {
   monoThreshold: number;
   palette: string[];
   brushSize: BrushSize;
+  brushShape: BrushShape;
   startCursor: StartCursor;
   startTool: DrawingTool;
   startColorIndex: number;

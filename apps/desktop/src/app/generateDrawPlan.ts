@@ -3,8 +3,8 @@ import { createBrushGrid, gridCellBounds, isGridCellInBounds } from "../brushGri
 import { pixelizeImage } from "../image/pixelize.js";
 import { renderPreviewToBuffer } from "../image/renderPreview.js";
 import { estimateRuntimeMs, generateScanlineCommands, type PathStrategy } from "../path/scanline.js";
-import { serializeCommands } from "../protocol/serializer.js";
-import type { DrawCommand } from "../protocol/commands.js";
+import { createInitialBrushMenuState, serializeCommands, serializeCommandsWithState } from "../protocol/serializer.js";
+import { endCommand, setBrushCommand, setToolCommand, type DrawCommand } from "../protocol/commands.js";
 import type { CanvasBounds, ColorDistanceMode, DitherMode, DrawingProfile, PixelMap } from "../types.js";
 
 export interface DrawPlanPathStats {
@@ -35,10 +35,15 @@ export interface DualPassDrawPlan extends DrawPlan {
   correctedPreviewPng: Buffer;
 }
 
-function cloneProfileWithBrushSize(profile: DrawingProfile, brushSize: DrawingProfile["brushSize"]): DrawingProfile {
+function cloneProfileWithBrush(
+  profile: DrawingProfile,
+  brushSize: DrawingProfile["brushSize"],
+  brushShape = profile.brushShape,
+): DrawingProfile {
   return {
     ...profile,
     brushSize,
+    brushShape,
   };
 }
 
@@ -138,27 +143,54 @@ function buildDualPassCorrectionMap(targetMap: PixelMap, coarseMap: PixelMap): P
   );
 }
 
-function buildDualPassCorrectedPreviewMap(targetMap: PixelMap, coarseMap: PixelMap): PixelMap {
+function buildDualPassEraseMap(targetMap: PixelMap, coarseMap: PixelMap): PixelMap {
   return targetMap.map((row, y) =>
     row.map((targetPixel, x) => {
       const coarsePixel = readCoarsePixelAtCanvasPixel(coarseMap, x, y);
-      const hasTarget = targetPixel.alpha > 0 && targetPixel.colorIndex >= 0;
       const hasCoarse = Boolean(coarsePixel && coarsePixel.alpha > 0 && coarsePixel.colorIndex >= 0);
-      const selected = hasTarget ? targetPixel : hasCoarse ? coarsePixel : null;
 
-      if (!selected) {
+      if (!hasCoarse || (targetPixel.alpha > 0 && targetPixel.colorIndex >= 0)) {
         return createEmptyPixel(x, y);
       }
 
       return {
         x,
         y,
-        colorIndex: selected.colorIndex,
-        colorHex: selected.colorHex,
+        colorIndex: 0,
+        colorHex: "#000000",
         alpha: 255,
       };
     }),
   );
+}
+
+function buildDualPassCorrectedPreviewMap(targetMap: PixelMap): PixelMap {
+  return targetMap.map((row, y) =>
+    row.map((targetPixel, x) => {
+      if (targetPixel.alpha <= 0 || targetPixel.colorIndex < 0) {
+        return createEmptyPixel(x, y);
+      }
+
+      return {
+        ...targetPixel,
+        x,
+        y,
+        alpha: 255,
+      };
+    }),
+  );
+}
+
+function scanlineBody(commands: DrawCommand[]): DrawCommand[] {
+  return commands.filter((command) => (
+    command.type !== "inputConfig" &&
+    command.type !== "setBrush" &&
+    command.type !== "end"
+  ));
+}
+
+function countVisiblePixels(pixelMap: PixelMap): number {
+  return pixelMap.flatMap((row) => row.filter((pixel) => pixel.alpha > 0 && pixel.colorIndex >= 0)).length;
 }
 
 function combinePathStats(left: DrawPlanPathStats, right: DrawPlanPathStats): DrawPlanPathStats {
@@ -191,26 +223,56 @@ export async function generateDualPassDrawPlan(
     pathStrategy?: PathStrategy;
   },
 ): Promise<DualPassDrawPlan> {
-  const coarseProfile = cloneProfileWithBrushSize(profile, 3);
-  const fineProfile = cloneProfileWithBrushSize(profile, 1);
+  const coarseProfile = cloneProfileWithBrush(profile, 3, "square");
+  const fineProfile = cloneProfileWithBrush(profile, 1, "square");
   const pass1 = await generateDrawPlan(imageSource, coarseProfile, previewScale, options);
+  const pass1DrawCommands = generateScanlineCommands(pass1.pixelMap, coarseProfile);
+  const pass1Serialized = serializeCommandsWithState(pass1DrawCommands, createInitialBrushMenuState());
+  pass1.commands = pass1Serialized.commands;
+  pass1.estimatedRuntimeMs = estimateRuntimeMs(pass1DrawCommands, coarseProfile);
+  pass1.pathStats = calculatePathStats(pass1DrawCommands);
+
   const { pixelMap: targetMap, usedColorIndexes, colorCounts } = await pixelizeImage(imageSource, fineProfile, options);
-  const correctionMap = buildDualPassCorrectionMap(targetMap, pass1.pixelMap);
-  const correctedPreviewMap = buildDualPassCorrectedPreviewMap(targetMap, pass1.pixelMap);
-  const pass2Commands = generateScanlineCommands(correctionMap, fineProfile, options?.pathStrategy);
+  const eraseMap = buildDualPassEraseMap(targetMap, pass1.pixelMap);
+  const paintMap = buildDualPassCorrectionMap(targetMap, pass1.pixelMap);
+  const correctedPreviewMap = buildDualPassCorrectedPreviewMap(targetMap);
+  const eraseCommands = generateScanlineCommands(eraseMap, fineProfile);
+  const paintCommands = generateScanlineCommands(paintMap, fineProfile);
+  const pass2Commands: DrawCommand[] = [...paintCommands.slice(0, 1)];
+
+  if (countVisiblePixels(eraseMap) > 0) {
+    pass2Commands.push(
+      setToolCommand("eraser"),
+      setBrushCommand(1, "square"),
+      ...scanlineBody(eraseCommands),
+    );
+  }
+
+  if (countVisiblePixels(paintMap) > 0) {
+    pass2Commands.push(
+      setToolCommand("pen"),
+      setBrushCommand(1, "square"),
+      ...scanlineBody(paintCommands),
+    );
+  } else if (countVisiblePixels(eraseMap) > 0) {
+    pass2Commands.push(setToolCommand("pen"));
+  }
+
+  pass2Commands.push(endCommand());
   const pass2PathStats = calculatePathStats(pass2Commands);
-  const pass2PreviewPng = await renderPreviewToBuffer(correctionMap, fineProfile, previewScale);
+  const pass2Serialized = serializeCommandsWithState(pass2Commands, pass1Serialized.brushState);
+  const pass2PreviewPng = await renderPreviewToBuffer(paintMap, fineProfile, previewScale);
   const correctedPreviewPng = await renderPreviewToBuffer(correctedPreviewMap, fineProfile, previewScale);
   const pass2: DrawPlan = {
-    commands: serializeCommands(pass2Commands),
-    pixelMap: correctionMap,
+    commands: pass2Serialized.commands,
+    pixelMap: paintMap,
     usedColorIndexes,
     colorCounts,
     paletteHexes: pass1.paletteHexes,
-    totalPixels: correctionMap.flatMap((row) => row.filter((pixel) => pixel.alpha > 0)).length,
+    totalPixels: countVisiblePixels(eraseMap) + countVisiblePixels(paintMap),
     estimatedRuntimeMs: estimateRuntimeMs(pass2Commands, fineProfile),
     previewPng: pass2PreviewPng,
-    imageBounds: calculateCanvasBounds(correctionMap, fineProfile),
+    imageBounds: calculateCanvasBounds(correctedPreviewMap, fineProfile),
     pathStats: pass2PathStats,
   };
 
@@ -221,7 +283,7 @@ export async function generateDualPassDrawPlan(
     usedColorIndexes,
     colorCounts,
     paletteHexes: pass1.paletteHexes,
-    totalPixels: targetMap.flatMap((row) => row.filter((pixel) => pixel.alpha > 0)).length,
+    totalPixels: countVisiblePixels(targetMap),
     estimatedRuntimeMs: pass1.estimatedRuntimeMs + pass2.estimatedRuntimeMs,
     previewPng: correctedPreviewPng,
     imageBounds: calculateCanvasBounds(correctedPreviewMap, fineProfile),
