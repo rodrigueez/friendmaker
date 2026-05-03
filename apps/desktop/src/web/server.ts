@@ -6,7 +6,7 @@ import os from "node:os";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-import { generateDrawPlan, generateDualPassDrawPlan } from "../app/generateDrawPlan.js";
+import { generateDrawPlan } from "../app/generateDrawPlan.js";
 import { applyCliOptions, type CliOptions } from "../cli/args.js";
 import { loadProfile } from "../config/loadProfile.js";
 import { OFFICIAL_COLOR_GRID } from "../config/officialPalette.js";
@@ -483,7 +483,6 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     palette?: string[];
     previewScale?: number;
     removeBackground?: boolean;
-    dualPass?: boolean;
     buttonPressMs?: number;
     inputDelayMs?: number;
     ditherMode?: DitherMode;
@@ -544,12 +543,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     pathStrategy: body.pathStrategy === "nearest" ? ("nearest" as const) : ("scanline" as const),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
-  const useDualPass = body.dualPass === true && profile.colorMode === "official";
-  const dualPlan = useDualPass
-    ? await generateDualPassDrawPlan(imageSource, profile, body.previewScale ?? 12, generationOptions)
-    : null;
-  const plan =
-    dualPlan ?? (await generateDrawPlan(imageSource, profile, body.previewScale ?? 12, generationOptions));
+  const plan = await generateDrawPlan(imageSource, profile, body.previewScale ?? 12, generationOptions);
 
   json(response, 200, {
     profile: {
@@ -567,7 +561,6 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       baudRate: profile.baudRate,
       ackTimeoutMs: profile.ackTimeoutMs,
       commandRetryCount: profile.commandRetryCount,
-      dualPass: useDualPass,
       buttonPressMs: profile.buttonPressDuration,
       inputDelayMs: profile.inputDelay,
       ditherMode: generationOptions.ditherMode,
@@ -592,30 +585,6 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     },
     previewDataUrl: `data:image/png;base64,${plan.previewPng.toString("base64")}`,
     commands: plan.commands,
-    ...(dualPlan
-      ? {
-          dualPass: {
-            pass1Commands: dualPlan.pass1.commands,
-            pass2Commands: dualPlan.pass2.commands,
-            pass1PreviewDataUrl: `data:image/png;base64,${dualPlan.pass1PreviewPng.toString("base64")}`,
-            correctedPreviewDataUrl: `data:image/png;base64,${dualPlan.correctedPreviewPng.toString("base64")}`,
-            pass1Stats: {
-              commandCount: dualPlan.pass1.commands.length,
-              totalPixels: dualPlan.pass1.totalPixels,
-              estimatedRuntimeMs: dualPlan.pass1.estimatedRuntimeMs,
-              estimatedRuntimeLabel: formatDuration(dualPlan.pass1.estimatedRuntimeMs),
-              pathStats: dualPlan.pass1.pathStats,
-            },
-            pass2Stats: {
-              commandCount: dualPlan.pass2.commands.length,
-              totalPixels: dualPlan.pass2.totalPixels,
-              estimatedRuntimeMs: dualPlan.pass2.estimatedRuntimeMs,
-              estimatedRuntimeLabel: formatDuration(dualPlan.pass2.estimatedRuntimeMs),
-              pathStats: dualPlan.pass2.pathStats,
-            },
-          },
-        }
-      : {}),
   });
 }
 

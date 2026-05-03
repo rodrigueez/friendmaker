@@ -63,7 +63,6 @@ const state = {
     colorMode: "mono",
     colorCount: 32,
     removeBackground: false,
-    dualPass: false,
     speedPreset: "60,60",
     buttonPressMs: 60,
     inputDelayMs: 60,
@@ -77,10 +76,6 @@ const state = {
     mergeSimilarColors: false,
     mergeThreshold: 40,
     pathStrategy: "scanline",
-    dualPassCommands: {
-      pass1: [],
-      pass2: [],
-    },
     usedColorIndexes: [],
     generatedPalette: [],
     officialPalette: {
@@ -114,11 +109,8 @@ const state = {
     },
   },
   custom: {
-    dualPass: false,
     brushSize: 3,
     commands: [],
-    pass1Commands: [],
-    pass2Commands: [],
     execution: {
       id: null,
       status: "idle",
@@ -194,7 +186,6 @@ const els = {
   brushSizeSelect: document.getElementById("brush-size-select"),
   colorModeSelect: document.getElementById("color-mode-select"),
   colorCountSelect: document.getElementById("color-count-select"),
-  dualPassCheckbox: document.getElementById("dual-pass-checkbox"),
   speedPresetSelect: document.getElementById("speed-preset-select"),
   speedCustomRow: document.getElementById("speed-custom-row"),
   speedPressInput: document.getElementById("speed-press-input"),
@@ -229,9 +220,6 @@ const els = {
   quickStartButton: document.getElementById("quick-start-button"),
   generateButton: document.getElementById("generate-button"),
   executeButton: document.getElementById("execute-button"),
-  dualPassExecutionRow: document.getElementById("dual-pass-execution-row"),
-  executePass1Button: document.getElementById("execute-pass1-button"),
-  executePass2Button: document.getElementById("execute-pass2-button"),
   pauseExecutionButton: document.getElementById("pause-execution-button"),
   resumeExecutionButton: document.getElementById("resume-execution-button"),
   stopExecutionButton: document.getElementById("stop-execution-button"),
@@ -242,11 +230,6 @@ const els = {
   previewCanvas: document.getElementById("preview-canvas"),
   previewImage: document.getElementById("preview-image"),
   previewEmpty: document.getElementById("preview-empty"),
-  dualPassPreviewRow: document.getElementById("dual-pass-preview-row"),
-  dualPass1PreviewImage: document.getElementById("dual-pass1-preview-image"),
-  dualPass2PreviewImage: document.getElementById("dual-pass2-preview-image"),
-  dualPass1PreviewMeta: document.getElementById("dual-pass1-preview-meta"),
-  dualPass2PreviewMeta: document.getElementById("dual-pass2-preview-meta"),
   scriptReplayRow: document.getElementById("script-replay-row"),
   scriptReplayCanvas: document.getElementById("script-replay-canvas"),
   scriptReplayMeta: document.getElementById("script-replay-meta"),
@@ -256,26 +239,15 @@ const els = {
   commandsOutput: document.getElementById("commands-output"),
   copyButton: document.getElementById("copy-button"),
   downloadButton: document.getElementById("download-button"),
-  dualPassScriptActions: document.getElementById("dual-pass-script-actions"),
-  copyPass1Button: document.getElementById("copy-pass1-button"),
-  downloadPass1Button: document.getElementById("download-pass1-button"),
-  copyPass2Button: document.getElementById("copy-pass2-button"),
-  downloadPass2Button: document.getElementById("download-pass2-button"),
   studioLogOutput: document.getElementById("log-output"),
   studioClearLogButton: document.getElementById("studio-clear-log-button"),
-  customDualPassCheckbox: document.getElementById("custom-dual-pass-checkbox"),
   customBrushSizeSelect: document.getElementById("custom-brush-size-select"),
   customPortSelect: document.getElementById("custom-port-select"),
   customCommandsInput: document.getElementById("custom-commands-input"),
-  customDualInputs: document.getElementById("custom-dual-inputs"),
-  customPass1Input: document.getElementById("custom-pass1-input"),
-  customPass2Input: document.getElementById("custom-pass2-input"),
   customPreviewButton: document.getElementById("custom-preview-button"),
   customNormalizeButton: document.getElementById("custom-normalize-button"),
   customClearButton: document.getElementById("custom-clear-button"),
   customExecuteButton: document.getElementById("custom-execute-button"),
-  customExecutePass1Button: document.getElementById("custom-execute-pass1-button"),
-  customExecutePass2Button: document.getElementById("custom-execute-pass2-button"),
   customPauseButton: document.getElementById("custom-pause-button"),
   customResumeButton: document.getElementById("custom-resume-button"),
   customStopButton: document.getElementById("custom-stop-button"),
@@ -286,8 +258,6 @@ const els = {
   customStatMode: document.getElementById("custom-stat-mode"),
   customCopyButton: document.getElementById("custom-copy-button"),
   customDownloadButton: document.getElementById("custom-download-button"),
-  customCopyPass1Button: document.getElementById("custom-copy-pass1-button"),
-  customCopyPass2Button: document.getElementById("custom-copy-pass2-button"),
   customRefreshPortsButton: document.getElementById("custom-refresh-ports-button"),
   customLogOutput: document.getElementById("custom-log-output"),
   customClearLogButton: document.getElementById("custom-clear-log-button"),
@@ -447,12 +417,6 @@ els.colorModeSelect.addEventListener("change", () => {
 
 els.colorCountSelect.addEventListener("change", () => {
   state.studio.colorCount = Number(els.colorCountSelect.value || state.studio.colorCount);
-  syncStudioUi();
-  scheduleStudioPreviewRefresh();
-});
-
-els.dualPassCheckbox.addEventListener("change", () => {
-  state.studio.dualPass = els.dualPassCheckbox.checked;
   syncStudioUi();
   scheduleStudioPreviewRefresh();
 });
@@ -620,14 +584,6 @@ els.quickStartButton.addEventListener("click", async () => {
     return;
   }
 
-  if (state.studio.dualPass && state.studio.dualPassCommands.pass1.length > 0) {
-    appendLog(
-      els.studioLogOutput,
-      "双遍模式已生成：请先点“跑粗 brush 3”，在游戏里切到 brush 1 后再点“跑细 brush 1”。",
-    );
-    return;
-  }
-
   await executeStudioCommands({
     logPrefix: `开始发送到设备：${state.selectedPortPath}`,
   });
@@ -642,20 +598,6 @@ els.generateButton.addEventListener("click", async () => {
 els.executeButton.addEventListener("click", async () => {
   await executeStudioCommands({
     logPrefix: `开始发送到设备：${state.selectedPortPath}`,
-  });
-});
-
-els.executePass1Button.addEventListener("click", async () => {
-  await executeStudioCommands({
-    logPrefix: `开始发送 brush 3 粗绘脚本到设备：${state.selectedPortPath}`,
-    commands: state.studio.dualPassCommands.pass1,
-  });
-});
-
-els.executePass2Button.addEventListener("click", async () => {
-  await executeStudioCommands({
-    logPrefix: `开始发送 brush 1 修正脚本到设备：${state.selectedPortPath}`,
-    commands: state.studio.dualPassCommands.pass2,
   });
 });
 
@@ -675,12 +617,6 @@ els.resetExecutionButton.addEventListener("click", async () => {
   await sendStudioExecutionControl("reset", "强制恢复绘制状态");
 });
 
-els.customDualPassCheckbox.addEventListener("change", () => {
-  state.custom.dualPass = els.customDualPassCheckbox.checked;
-  syncCustomUi();
-  renderCustomPreview();
-});
-
 els.customBrushSizeSelect.addEventListener("change", () => {
   state.custom.brushSize = Number(els.customBrushSizeSelect.value) || 3;
   syncCustomUi();
@@ -697,24 +633,12 @@ els.customNormalizeButton.addEventListener("click", () => {
 
 els.customClearButton.addEventListener("click", () => {
   els.customCommandsInput.value = "";
-  els.customPass1Input.value = "";
-  els.customPass2Input.value = "";
   renderCustomPreview();
 });
 
 els.customExecuteButton.addEventListener("click", async () => {
   renderCustomPreview();
-  await executeCustomCommands(getCustomCombinedCommands(), "开始执行自定义脚本");
-});
-
-els.customExecutePass1Button.addEventListener("click", async () => {
-  renderCustomPreview();
-  await executeCustomCommands(state.custom.pass1Commands, "开始执行自定义 pass1");
-});
-
-els.customExecutePass2Button.addEventListener("click", async () => {
-  renderCustomPreview();
-  await executeCustomCommands(state.custom.pass2Commands, "开始执行自定义 pass2");
+  await executeCustomCommands(state.custom.commands, "开始执行自定义脚本");
 });
 
 els.customPauseButton.addEventListener("click", async () => {
@@ -730,19 +654,11 @@ els.customStopButton.addEventListener("click", async () => {
 });
 
 els.customCopyButton.addEventListener("click", async () => {
-  await copyCommandsToClipboard(getCustomCombinedCommands(), "自定义脚本");
+  await copyCommandsToClipboard(state.custom.commands, "自定义脚本");
 });
 
 els.customDownloadButton.addEventListener("click", () => {
-  downloadCommands(getCustomCombinedCommands(), "custom-friendmaker-commands.txt", "自定义脚本");
-});
-
-els.customCopyPass1Button.addEventListener("click", async () => {
-  await copyCommandsToClipboard(state.custom.pass1Commands, "自定义 pass1");
-});
-
-els.customCopyPass2Button.addEventListener("click", async () => {
-  await copyCommandsToClipboard(state.custom.pass2Commands, "自定义 pass2");
+  downloadCommands(state.custom.commands, "custom-friendmaker-commands.txt", "自定义脚本");
 });
 
 els.customRefreshPortsButton.addEventListener("click", async () => {
@@ -800,7 +716,6 @@ function buildStudioGeneratePayload() {
     threshold: Number(els.thresholdRange.value),
     previewScale: 12,
     removeBackground: state.studio.removeBackground,
-    dualPass: state.studio.dualPass,
     buttonPressMs: state.studio.buttonPressMs,
     inputDelayMs: state.studio.inputDelayMs,
     ditherMode: state.studio.ditherMode,
@@ -861,7 +776,6 @@ function applyGeneratedStudioPayload(payload) {
       : "mono";
   state.studio.colorCount = payload.profile.colorCount ?? state.studio.colorCount;
   state.studio.removeBackground = payload.profile.removeBackground === true;
-  state.studio.dualPass = payload.profile.dualPass === true;
   state.studio.buttonPressMs = payload.profile.buttonPressMs ?? state.studio.buttonPressMs;
   state.studio.inputDelayMs = payload.profile.inputDelayMs ?? state.studio.inputDelayMs;
   state.studio.ditherMode = payload.profile.ditherMode ?? state.studio.ditherMode;
@@ -873,11 +787,6 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.mergeSimilarColors = payload.profile.mergeSimilarColors ?? state.studio.mergeSimilarColors;
   state.studio.mergeThreshold = payload.profile.mergeThreshold ?? state.studio.mergeThreshold;
   state.studio.pathStrategy = payload.profile.pathStrategy ?? state.studio.pathStrategy;
-  state.studio.dualPassCommands = {
-    pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
-    pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
-  };
-
   els.commandsOutput.value = payload.commands.join("\n");
   els.previewImage.src = payload.previewDataUrl;
   els.previewImage.classList.add("visible");
@@ -894,36 +803,9 @@ function applyGeneratedStudioPayload(payload) {
     ? `${payload.stats.commandCount} · L ${payload.stats.pathStats.lineRunCount}`
     : String(payload.stats.commandCount);
   els.statRuntime.textContent = payload.stats.estimatedRuntimeLabel;
-  renderDualPassPayload(payload);
   renderScriptReplay();
   void updatePreviewBounds(payload);
   renderOfficialPalettePreview();
-}
-
-function renderDualPassPayload(payload) {
-  const dual = payload?.dualPass;
-  const hasDual =
-    payload?.profile?.dualPass === true &&
-    dual &&
-    Array.isArray(dual.pass1Commands) &&
-    Array.isArray(dual.pass2Commands);
-
-  els.dualPassPreviewRow.classList.toggle("hidden", !hasDual);
-
-  if (!hasDual) {
-    els.dualPass1PreviewImage.removeAttribute("src");
-    els.dualPass2PreviewImage.removeAttribute("src");
-    els.dualPass1PreviewMeta.textContent = "-";
-    els.dualPass2PreviewMeta.textContent = "-";
-    return;
-  }
-
-  els.dualPass1PreviewImage.src = dual.pass1PreviewDataUrl;
-  els.dualPass2PreviewImage.src = dual.correctedPreviewDataUrl;
-  els.dualPass1PreviewMeta.textContent =
-    `粗绘 ${dual.pass1Stats.commandCount} 条命令 · ${dual.pass1Stats.estimatedRuntimeLabel}`;
-  els.dualPass2PreviewMeta.textContent =
-    `修正 ${dual.pass2Stats.commandCount} 条命令 · ${dual.pass2Stats.estimatedRuntimeLabel}`;
 }
 
 function officialPaletteRgb(index) {
@@ -961,12 +843,7 @@ function renderScriptReplay() {
 
   let drawn = 0;
 
-  if (state.studio.dualPass && state.studio.dualPassCommands.pass1.length > 0) {
-    drawn += runScriptOnReplayCanvas(ctx, state.studio.dualPassCommands.pass1, 3);
-    drawn += runScriptOnReplayCanvas(ctx, state.studio.dualPassCommands.pass2, 1);
-  } else {
-    drawn += runScriptOnReplayCanvas(ctx, state.commands, state.studio.brushSize);
-  }
+  drawn += runScriptOnReplayCanvas(ctx, state.commands, state.studio.brushSize);
 
   els.scriptReplayRow.classList.remove("hidden");
   els.scriptReplayMeta.textContent = `${drawn} 笔回放`;
@@ -1231,27 +1108,13 @@ function parseCustomCommandText(text) {
     .filter((line) => line && !line.startsWith("#"));
 }
 
-function getCustomCombinedCommands() {
-  return state.custom.dualPass
-    ? [...state.custom.pass1Commands, ...state.custom.pass2Commands]
-    : state.custom.commands;
-}
-
 function normalizeCustomCommandInputs() {
-  if (state.custom.dualPass) {
-    els.customPass1Input.value = parseCustomCommandText(els.customPass1Input.value).join("\n");
-    els.customPass2Input.value = parseCustomCommandText(els.customPass2Input.value).join("\n");
-  } else {
-    els.customCommandsInput.value = parseCustomCommandText(els.customCommandsInput.value).join("\n");
-  }
-
+  els.customCommandsInput.value = parseCustomCommandText(els.customCommandsInput.value).join("\n");
   renderCustomPreview();
 }
 
 function renderCustomPreview() {
   state.custom.commands = parseCustomCommandText(els.customCommandsInput.value);
-  state.custom.pass1Commands = parseCustomCommandText(els.customPass1Input.value);
-  state.custom.pass2Commands = parseCustomCommandText(els.customPass2Input.value);
 
   const canvas = els.customReplayCanvas;
   const ctx = canvas.getContext("2d");
@@ -1266,17 +1129,12 @@ function renderCustomPreview() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
   let drawn = 0;
-  if (state.custom.dualPass) {
-    drawn += runScriptOnReplayCanvas(ctx, state.custom.pass1Commands, 3);
-    drawn += runScriptOnReplayCanvas(ctx, state.custom.pass2Commands, 1);
-  } else {
-    drawn += runScriptOnReplayCanvas(ctx, state.custom.commands, state.custom.brushSize);
-  }
+  drawn += runScriptOnReplayCanvas(ctx, state.custom.commands, state.custom.brushSize);
 
-  const totalCommands = getCustomCombinedCommands().length;
+  const totalCommands = state.custom.commands.length;
   els.customStatCommands.textContent = String(totalCommands);
   els.customStatDrawn.textContent = String(drawn);
-  els.customStatMode.textContent = state.custom.dualPass ? "双遍" : `brush ${state.custom.brushSize}`;
+  els.customStatMode.textContent = `brush ${state.custom.brushSize}`;
   syncCustomUi();
 }
 
@@ -1384,21 +1242,6 @@ function downloadCommands(commands, filename, label) {
   appendLog(els.studioLogOutput, `${label} 已下载。`);
 }
 
-els.copyPass1Button.addEventListener("click", async () => {
-  await copyCommandsToClipboard(state.studio.dualPassCommands.pass1, "pass1");
-});
-
-els.copyPass2Button.addEventListener("click", async () => {
-  await copyCommandsToClipboard(state.studio.dualPassCommands.pass2, "pass2");
-});
-
-els.downloadPass1Button.addEventListener("click", () => {
-  downloadCommands(state.studio.dualPassCommands.pass1, "tomodachi-pass1-brush3.txt", "pass1");
-});
-
-els.downloadPass2Button.addEventListener("click", () => {
-  downloadCommands(state.studio.dualPassCommands.pass2, "tomodachi-pass2-brush1.txt", "pass2");
-});
 
 els.studioClearLogButton.addEventListener("click", () => {
   clearLog(els.studioLogOutput);
@@ -1848,7 +1691,6 @@ function setStudioBusy(isBusy) {
   els.offsetYRange.disabled = isBusy;
   els.sizeSelect.disabled = isBusy;
   els.brushSizeSelect.disabled = isBusy;
-  els.dualPassCheckbox.disabled = isBusy;
   els.speedPresetSelect.disabled = isBusy;
   els.speedPressInput.disabled = isBusy;
   els.speedDelayInput.disabled = isBusy;
@@ -2598,17 +2440,11 @@ function syncCustomUi() {
   const executionRunning = state.custom.execution.status === "running";
   const hasPort = Boolean(state.selectedPortPath);
   const controllerReady = isControllerReadyForStudio();
-  const combinedCommands = getCustomCombinedCommands();
+  const combinedCommands = state.custom.commands;
 
-  els.customDualPassCheckbox.checked = state.custom.dualPass;
   els.customBrushSizeSelect.value = String(state.custom.brushSize);
-  els.customCommandsInput.classList.toggle("hidden", state.custom.dualPass);
-  els.customDualInputs.classList.toggle("hidden", !state.custom.dualPass);
-  els.customBrushSizeSelect.disabled = executionActive || state.custom.dualPass;
-  els.customDualPassCheckbox.disabled = executionActive;
+  els.customBrushSizeSelect.disabled = executionActive;
   els.customCommandsInput.disabled = executionActive;
-  els.customPass1Input.disabled = executionActive;
-  els.customPass2Input.disabled = executionActive;
   els.customPortSelect.disabled = executionActive;
   els.customPreviewButton.disabled = executionActive;
   els.customNormalizeButton.disabled = executionActive;
@@ -2616,17 +2452,11 @@ function syncCustomUi() {
   els.customRefreshPortsButton.disabled = executionActive;
   els.customExecuteButton.disabled =
     executionActive || combinedCommands.length === 0 || !hasPort || !controllerReady;
-  els.customExecutePass1Button.disabled =
-    executionActive || !state.custom.dualPass || state.custom.pass1Commands.length === 0 || !hasPort || !controllerReady;
-  els.customExecutePass2Button.disabled =
-    executionActive || !state.custom.dualPass || state.custom.pass2Commands.length === 0 || !hasPort || !controllerReady;
   els.customPauseButton.disabled = !executionRunning;
   els.customResumeButton.disabled = !executionPaused;
   els.customStopButton.disabled = !(executionRunning || executionPaused);
   els.customCopyButton.disabled = combinedCommands.length === 0;
   els.customDownloadButton.disabled = combinedCommands.length === 0;
-  els.customCopyPass1Button.disabled = !state.custom.dualPass || state.custom.pass1Commands.length === 0;
-  els.customCopyPass2Button.disabled = !state.custom.dualPass || state.custom.pass2Commands.length === 0;
   renderCustomExecutionStatus();
 }
 
@@ -2769,7 +2599,6 @@ function syncStudioUi() {
   els.previewGuideSelect.value = state.studio.previewGuideMode;
   els.previewCanvas.dataset.guide = state.studio.previewGuideMode;
   els.colorModeSelect.value = state.studio.colorMode;
-  els.dualPassCheckbox.checked = state.studio.dualPass;
   els.speedPresetSelect.value = state.studio.speedPreset;
   els.speedPressInput.value = String(state.studio.buttonPressMs);
   els.speedDelayInput.value = String(state.studio.inputDelayMs);
@@ -2796,15 +2625,14 @@ function syncStudioUi() {
     : "当前不会自动扣背景；如果素材是白底或棋盘格假透明图，建议开启。";
   const squareBrushHint = "建议同时把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。";
   const scaleHint = `当前导入缩放是 ${state.studio.imageScalePercent}%，100% 表示完整放进画布。`;
-  const speedHint = `绘制速度为按键 ${state.studio.buttonPressMs}ms / 间隔 ${state.studio.inputDelayMs}ms。`;
   const positionHint = describeImagePosition(
     state.studio.imageOffsetXPercent,
     state.studio.imageOffsetYPercent,
   );
-  if (state.studio.colorMode === “mono”) {
+  if (state.studio.colorMode === "mono") {
     els.studioModeHint.textContent =
       `深色像素会绘制，浅色像素会保留为空白背景。当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再放进 256x256 脚本坐标画布，并按 ${state.studio.brushSize} 号笔和画布中心起步生成。${scaleHint}${positionHint}${squareBrushHint}${backgroundHint}`;
-  } else if (state.studio.colorMode === “official”) {
+  } else if (state.studio.colorMode === "official") {
     els.studioModeHint.textContent =
       `当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再把图片压到 ${state.studio.colorCount} 个官方色以内，并映射到游戏内置的 7x12 官方色盘，再按 ${state.studio.brushSize} 号笔生成。${scaleHint}${positionHint}开始前请保持右侧 9 个槽位默认颜色不变。${squareBrushHint}${backgroundHint}`;
   } else {
@@ -2822,8 +2650,6 @@ function syncStudioUi() {
   els.offsetYRange.disabled = state.studio.busy || executionActive;
   els.offsetYInput.disabled = state.studio.busy || executionActive;
   els.colorModeSelect.disabled = state.studio.busy || executionActive;
-  els.dualPassCheckbox.disabled =
-    state.studio.busy || executionActive || state.studio.colorMode !== "official";
   els.speedPresetSelect.disabled = state.studio.busy || executionActive;
   els.speedPressInput.disabled = state.studio.busy || executionActive;
   els.speedDelayInput.disabled = state.studio.busy || executionActive;
@@ -2847,7 +2673,6 @@ function syncStudioUi() {
   els.thresholdRange.disabled = state.studio.busy || executionActive;
   els.quickStartButton.textContent = "一键开始绘制";
   els.executeButton.textContent = "执行现有脚本";
-  els.dualPassExecutionRow.classList.toggle("hidden", !state.studio.dualPass);
   els.quickStartButton.disabled =
     state.studio.busy ||
     executionActive ||
@@ -2857,27 +2682,9 @@ function syncStudioUi() {
   els.executeButton.disabled =
     state.studio.busy ||
     executionActive ||
-    state.studio.dualPass ||
     state.commands.length === 0 ||
     !hasPort ||
     !controllerReady;
-  els.executePass1Button.disabled =
-    state.studio.busy ||
-    executionActive ||
-    state.studio.dualPassCommands.pass1.length === 0 ||
-    !hasPort ||
-    !controllerReady;
-  els.executePass2Button.disabled =
-    state.studio.busy ||
-    executionActive ||
-    state.studio.dualPassCommands.pass2.length === 0 ||
-    !hasPort ||
-    !controllerReady;
-  els.dualPassScriptActions.classList.toggle("hidden", !state.studio.dualPass);
-  els.copyPass1Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass1.length === 0;
-  els.downloadPass1Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass1.length === 0;
-  els.copyPass2Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass2.length === 0;
-  els.downloadPass2Button.disabled = state.studio.busy || state.studio.dualPassCommands.pass2.length === 0;
   els.generateButton.disabled = state.studio.busy || executionActive;
   els.pauseExecutionButton.disabled = !executionRunning;
   els.resumeExecutionButton.disabled = !executionPaused;

@@ -183,13 +183,6 @@
                 </select>
               </label>
 
-              <label class="checkbox-card" for="dual-pass-checkbox">
-                <input id="dual-pass-checkbox" type="checkbox" />
-                <span class="checkbox-copy">
-                  <strong>双遍模式</strong>
-                  <small>官方色绘制时先生成 brush 3 粗绘，再生成 brush 1 修正。</small>
-                </span>
-              </label>
 
               <label>
                 <span>绘制速度</span>
@@ -374,11 +367,6 @@
               <button id="execute-button" class="ghost" disabled>执行现有脚本</button>
             </div>
 
-            <div id="dual-pass-execution-row" class="action-row slim hidden">
-              <button id="execute-pass1-button" class="ghost" type="button" disabled>跑粗 brush 3</button>
-              <button id="execute-pass2-button" class="ghost" type="button" disabled>跑细 brush 1</button>
-            </div>
-
             <div class="action-row slim">
               <button id="pause-execution-button" class="ghost" type="button" disabled>暂停绘制</button>
               <button id="resume-execution-button" class="ghost" type="button" disabled>继续绘制</button>
@@ -421,19 +409,6 @@
                 <img id="preview-image" alt="生成预览" />
                 <div class="preview-guide" aria-hidden="true"></div>
                 <div class="empty-state" id="preview-empty">生成后这里会显示像素预览。</div>
-              </div>
-            </div>
-
-            <div id="dual-pass-preview-row" class="preview-meta-strip hidden">
-              <div class="preview-meta-card">
-                <span>3 像素预览</span>
-                <img id="dual-pass1-preview-image" alt="brush 3 粗绘预览" style="width:100%;image-rendering:pixelated;border-radius:8px;" />
-                <small id="dual-pass1-preview-meta">-</small>
-              </div>
-              <div class="preview-meta-card">
-                <span>1 像素修正后</span>
-                <img id="dual-pass2-preview-image" alt="brush 1 修正后预览" style="width:100%;image-rendering:pixelated;border-radius:8px;" />
-                <small id="dual-pass2-preview-meta">-</small>
               </div>
             </div>
 
@@ -507,12 +482,6 @@
               <button id="download-button" class="ghost" disabled>下载脚本</button>
             </div>
 
-            <div id="dual-pass-script-actions" class="action-row slim hidden">
-              <button id="copy-pass1-button" class="ghost" disabled>复制 pass1</button>
-              <button id="download-pass1-button" class="ghost" disabled>下载 pass1</button>
-              <button id="copy-pass2-button" class="ghost" disabled>复制 pass2</button>
-              <button id="download-pass2-button" class="ghost" disabled>下载 pass2</button>
-            </div>
           </section>
 
           <section class="panel panel-log">
@@ -535,7 +504,7 @@
           <div class="page-intro-copy">
             <p class="page-kicker">自定义命令</p>
             <h2>粘贴外部脚本，先回放确认，再直接执行</h2>
-            <p>适合导入外部生成的 Friend Maker 命令，支持单段脚本和双遍 pass1/pass2 脚本。</p>
+            <p>适合导入外部生成的 Friend Maker 命令。</p>
           </div>
           <div class="page-step-row" aria-label="自定义命令步骤">
             <span class="page-step">1. 粘贴命令</span>
@@ -550,14 +519,6 @@
               <h2>命令输入</h2>
               <p>每行一条命令。空行和以 # 开头的注释会被忽略。</p>
             </div>
-
-            <label class="checkbox-card" for="custom-dual-pass-checkbox">
-              <input id="custom-dual-pass-checkbox" type="checkbox" />
-              <span class="checkbox-copy">
-                <strong>双遍模式</strong>
-                <small>pass1 按 brush 3 回放/执行，pass2 按 brush 1 回放/执行。</small>
-              </span>
-            </label>
 
             <div class="field-grid studio-settings-grid">
               <label>
@@ -581,17 +542,6 @@
 
             <textarea id="custom-commands-input" class="code-block" rows="14" spellcheck="false" placeholder="CFG INPUT 60 60 1800&#10;BC RESET&#10;BC 0 0 0&#10;C 0&#10;M -10 -10&#10;P&#10;E"></textarea>
 
-            <div id="custom-dual-inputs" class="hidden">
-              <label>
-                <span>pass1 / brush 3</span>
-                <textarea id="custom-pass1-input" class="code-block" rows="10" spellcheck="false"></textarea>
-              </label>
-              <label>
-                <span>pass2 / brush 1</span>
-                <textarea id="custom-pass2-input" class="code-block" rows="10" spellcheck="false"></textarea>
-              </label>
-            </div>
-
             <div class="action-row slim">
               <button id="custom-preview-button" class="ghost" type="button">预览回放</button>
               <button id="custom-normalize-button" class="ghost" type="button">整理命令</button>
@@ -600,8 +550,6 @@
 
             <div class="action-row">
               <button id="custom-execute-button" class="primary" type="button" disabled>执行脚本</button>
-              <button id="custom-execute-pass1-button" class="ghost" type="button" disabled>执行 pass1</button>
-              <button id="custom-execute-pass2-button" class="ghost" type="button" disabled>执行 pass2</button>
             </div>
 
             <div class="action-row slim">
@@ -639,8 +587,6 @@
             <div class="action-row slim">
               <button id="custom-copy-button" class="ghost" type="button" disabled>复制脚本</button>
               <button id="custom-download-button" class="ghost" type="button" disabled>下载脚本</button>
-              <button id="custom-copy-pass1-button" class="ghost" type="button" disabled>复制 pass1</button>
-              <button id="custom-copy-pass2-button" class="ghost" type="button" disabled>复制 pass2</button>
             </div>
           </section>
 
