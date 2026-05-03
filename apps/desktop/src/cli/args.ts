@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import type { BrushShape, ColorMode, DrawingProfile, ResizeMode } from "../types.js";
+import type { ColorMode, DrawingProfile, ResizeMode } from "../types.js";
 import { DEFAULT_PALETTE } from "../config/defaultProfile.js";
 import { OFFICIAL_PALETTE } from "../config/officialPalette.js";
 import { normalizeHexColor } from "../utils/colors.js";
@@ -19,7 +19,6 @@ export interface CliOptions {
   width?: number;
   height?: number;
   brushSize?: 1 | 3 | 7 | 13 | 19 | 27;
-  brushShape?: BrushShape;
   colors?: number;
   threshold?: number;
   baud?: number;
@@ -98,16 +97,6 @@ export function parseCliArgs(rawArgs: string[]): CliOptions {
             throw new Error("--brush-size must be one of 1, 3, 7, 13, 19, 27");
           }
           options.brushSize = value;
-        }
-        index += 1;
-        break;
-      case "--brush-shape":
-        {
-          const value = readValue(rawArgs, index, arg);
-          if (value !== "round" && value !== "square") {
-            throw new Error("--brush-shape must be one of round, square");
-          }
-          options.brushShape = value;
         }
         index += 1;
         break;
@@ -195,7 +184,6 @@ export function applyCliOptions(profile: DrawingProfile, options: CliOptions): D
       canvasWidth: width,
       canvasHeight: height,
       brushSize: options.brushSize ?? profile.brushSize,
-      brushShape: options.brushShape ?? profile.brushShape,
       resizeMode: options.resizeMode ?? profile.resizeMode,
       colorMode,
       colorCount,
@@ -217,7 +205,6 @@ export function applyCliOptions(profile: DrawingProfile, options: CliOptions): D
     canvasWidth: width,
     canvasHeight: height,
     brushSize: options.brushSize ?? profile.brushSize,
-    brushShape: options.brushShape ?? profile.brushShape,
     resizeMode: options.resizeMode ?? profile.resizeMode,
     colorMode,
     colorCount: requestedColors,
@@ -255,7 +242,6 @@ export function printHelp(): string {
     "  --width <n>              Canvas width override",
     "  --height <n>             Canvas height override",
     "  --brush-size <n>         Brush size override (1, 3, 7, 13, 19, 27)",
-    "  --brush-shape <shape>    Brush shape override (round, square)",
     "  --mode mono|palette|official Quantization mode",
     "  --colors <n>             Palette size when using palette mode",
     "  --threshold <n>          Mono threshold (0-255)",

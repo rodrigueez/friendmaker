@@ -28,7 +28,7 @@
           </p>
           <p class="subcopy">
             推荐顺序是先刷固件，再做手柄测试，最后回到“脚本生成”页导入图片并先点“仅生成命令”。手柄测试未通过时，不允许开始正式绘制。开始前请确认
-            Switch 处于初始绘画页面、光标停在画布中心、侧边色彩槽保持默认；彩色模式请使用“官方色绘制”，自定义调色板暂未开放。脚本会自动切换笔刷大小和形状。建议首次先用简单图和大画笔测试，开始绘制后不要再操作手柄或触碰屏幕，以免错位。
+            Switch 处于初始绘画页面、画笔停在画布中心、侧边色彩槽保持默认；彩色模式请使用“官方色绘制”，自定义调色板暂未开放。建议首次先用简单图和大画笔测试，开始绘制后不要再操作手柄或触碰屏幕，以免错位。
           </p>
         </div>
         <div class="hero-side">
@@ -131,7 +131,7 @@
             <div class="execution-box mono-note-box">
               <div class="panel-head compact">
                 <h2>绘制模式</h2>
-                <p>当前固定走 256x256 脚本坐标画布并从画布中心起步。单色模式画黑白图，官方色模式会量化到游戏内置的 7x12 色盘；脚本会按下方选择自动切换画笔大小和形状。</p>
+                <p>当前固定走 256x256 脚本坐标画布并从画布中心起步。单色模式画黑白图，官方色模式会量化到游戏内置的 7x12 色盘；画笔大小按下方选择生成。建议在游戏里切换为方块笔刷，整体观感通常会更美观。</p>
               </div>
 
               <p class="hint" id="studio-mode-hint">
@@ -156,14 +156,6 @@
                   <option value="13">13</option>
                   <option value="19">19</option>
                   <option value="27">27</option>
-                </select>
-              </label>
-
-              <label>
-                <span>画笔形状</span>
-                <select id="brush-shape-select">
-                  <option value="square" selected>方块</option>
-                  <option value="round">圆形</option>
                 </select>
               </label>
 
@@ -194,7 +186,7 @@
                 <input id="dual-pass-checkbox" type="checkbox" />
                 <span class="checkbox-copy">
                   <strong>双遍模式</strong>
-                  <small>官方色绘制时先用方3粗绘，再用方1橡皮擦透明外溢并补画。</small>
+                  <small>官方色绘制时先生成 brush 3 粗绘，再生成 brush 1 修正。</small>
                 </span>
               </label>
 
@@ -347,7 +339,7 @@
             <div class="execution-box">
               <div class="panel-head compact">
                 <h2>执行</h2>
-                <p>手柄连接完成后，这里会直接把脚本发送到 ESP32 串口设备。开始前只需要确认在画布中心和默认颜色槽；笔刷会由脚本自动切换。</p>
+                <p>手柄连接完成后，这里会直接把脚本发送到 ESP32 串口设备。开始前建议把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。</p>
               </div>
 
               <div class="field-grid execution-grid">
@@ -364,7 +356,7 @@
               </div>
 
               <p class="hint" id="execution-hint">请选择串口设备，连接手柄后即可直接开始绘制。</p>
-              <p class="hint">安全时序模式会默认启用；请先刷入最新固件。执行前也请再确认一次：Switch 光标在画布中心，右侧颜色槽保持默认。</p>
+              <p class="hint">安全时序模式会默认启用；请先刷入最新固件。执行前也请再确认一次：Switch 里的画笔大小和网页一致，并且当前已切到方块笔刷。</p>
             </div>
 
             <div class="action-row">
@@ -374,8 +366,8 @@
             </div>
 
             <div id="dual-pass-execution-row" class="action-row slim hidden">
-              <button id="execute-pass1-button" class="ghost" type="button" disabled>跑方3粗绘</button>
-              <button id="execute-pass2-button" class="ghost" type="button" disabled>跑方1擦补</button>
+              <button id="execute-pass1-button" class="ghost" type="button" disabled>跑粗 brush 3</button>
+              <button id="execute-pass2-button" class="ghost" type="button" disabled>跑细 brush 1</button>
             </div>
 
             <div class="action-row slim">
@@ -554,7 +546,7 @@
               <input id="custom-dual-pass-checkbox" type="checkbox" />
               <span class="checkbox-copy">
                 <strong>双遍模式</strong>
-                <small>pass1 按方3回放/执行，pass2 按方1擦补回放/执行。</small>
+                <small>pass1 按 brush 3 回放/执行，pass2 按 brush 1 回放/执行。</small>
               </span>
             </label>
 
@@ -582,11 +574,11 @@
 
             <div id="custom-dual-inputs" class="hidden">
               <label>
-                <span>pass1 / 方3粗绘</span>
+                <span>pass1 / brush 3</span>
                 <textarea id="custom-pass1-input" class="code-block" rows="10" spellcheck="false"></textarea>
               </label>
               <label>
-                <span>pass2 / 方1擦补</span>
+                <span>pass2 / brush 1</span>
                 <textarea id="custom-pass2-input" class="code-block" rows="10" spellcheck="false"></textarea>
               </label>
             </div>

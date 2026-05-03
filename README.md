@@ -573,8 +573,8 @@ http://127.0.0.1:4307
 
 These are the three most commonly missed prerequisites:
 
-1. Before drawing starts, the cursor must be positioned at the canvas center
-2. The script automatically switches brush size and shape from the default canvas state
+1. The brush size in Switch must match the current selection in the web UI
+2. Before drawing starts, the brush and cursor must be positioned at the canvas center
 3. If you use official palette drawing, keep the game's default colors for the `9` palette slots
 
 ### Automatic Background Removal
@@ -598,7 +598,7 @@ Notes:
 #### Script Studio
 
 - Import images
-- Choose brush size and shape
+- Choose brush size
 - Choose mono drawing or official palette drawing
 - Generate previews and command scripts
 - Review official palette previews, statistics, and execution status

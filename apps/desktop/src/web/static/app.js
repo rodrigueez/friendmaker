@@ -56,7 +56,6 @@ const state = {
     target: "serial",
     canvasSize: 256,
     brushSize: 3,
-    brushShape: "square",
     imageScalePercent: 100,
     imageOffsetXPercent: 0,
     imageOffsetYPercent: 0,
@@ -192,7 +191,6 @@ const els = {
   studioModeHint: document.getElementById("studio-mode-hint"),
   sizeSelect: document.getElementById("size-select"),
   brushSizeSelect: document.getElementById("brush-size-select"),
-  brushShapeSelect: document.getElementById("brush-shape-select"),
   colorModeSelect: document.getElementById("color-mode-select"),
   colorCountSelect: document.getElementById("color-count-select"),
   dualPassCheckbox: document.getElementById("dual-pass-checkbox"),
@@ -395,12 +393,6 @@ els.sizeSelect.addEventListener("change", () => {
 
 els.brushSizeSelect.addEventListener("change", () => {
   state.studio.brushSize = Number(els.brushSizeSelect.value);
-  syncStudioUi();
-  scheduleStudioPreviewRefresh();
-});
-
-els.brushShapeSelect.addEventListener("change", () => {
-  state.studio.brushShape = els.brushShapeSelect.value === "round" ? "round" : "square";
   syncStudioUi();
   scheduleStudioPreviewRefresh();
 });
@@ -624,7 +616,7 @@ els.quickStartButton.addEventListener("click", async () => {
   if (state.studio.dualPass && state.studio.dualPassCommands.pass1.length > 0) {
     appendLog(
       els.studioLogOutput,
-      "双遍模式已生成：请先点“跑方3粗绘”，完成后直接点“跑方1擦补”。pass2 会自动切橡皮和笔刷。",
+      "双遍模式已生成：请先点“跑粗 brush 3”，在游戏里切到 brush 1 后再点“跑细 brush 1”。",
     );
     return;
   }
@@ -648,14 +640,14 @@ els.executeButton.addEventListener("click", async () => {
 
 els.executePass1Button.addEventListener("click", async () => {
   await executeStudioCommands({
-    logPrefix: `开始发送方3粗绘脚本到设备：${state.selectedPortPath}`,
+    logPrefix: `开始发送 brush 3 粗绘脚本到设备：${state.selectedPortPath}`,
     commands: state.studio.dualPassCommands.pass1,
   });
 });
 
 els.executePass2Button.addEventListener("click", async () => {
   await executeStudioCommands({
-    logPrefix: `开始发送方1擦补脚本到设备：${state.selectedPortPath}`,
+    logPrefix: `开始发送 brush 1 修正脚本到设备：${state.selectedPortPath}`,
     commands: state.studio.dualPassCommands.pass2,
   });
 });
@@ -792,7 +784,6 @@ function buildStudioGeneratePayload() {
     imageDataUrl: state.imageDataUrl,
     size: state.studio.canvasSize,
     brushSize: state.studio.brushSize,
-    brushShape: state.studio.brushShape,
     imageScalePercent: state.studio.imageScalePercent,
     imageOffsetXPercent: state.studio.imageOffsetXPercent,
     imageOffsetYPercent: state.studio.imageOffsetYPercent,
@@ -848,7 +839,6 @@ function applyGeneratedStudioPayload(payload) {
     commandRetryCount: payload.profile.commandRetryCount ?? 1,
   };
   state.studio.brushSize = payload.profile.brushSize ?? state.studio.brushSize;
-  state.studio.brushShape = payload.profile.brushShape ?? state.studio.brushShape;
   state.studio.imageScalePercent =
     payload.profile.imageScalePercent ?? state.studio.imageScalePercent;
   state.studio.imageOffsetXPercent =
@@ -915,9 +905,9 @@ function renderDualPassPayload(payload) {
   els.dualPass1PreviewImage.src = dual.pass1PreviewDataUrl;
   els.dualPass2PreviewImage.src = dual.correctedPreviewDataUrl;
   els.dualPass1PreviewMeta.textContent =
-    `方3粗绘 ${dual.pass1Stats.commandCount} 条命令 · ${dual.pass1Stats.estimatedRuntimeLabel}`;
+    `粗绘 ${dual.pass1Stats.commandCount} 条命令 · ${dual.pass1Stats.estimatedRuntimeLabel}`;
   els.dualPass2PreviewMeta.textContent =
-    `方1擦补 ${dual.pass2Stats.commandCount} 条命令 · ${dual.pass2Stats.estimatedRuntimeLabel}`;
+    `修正 ${dual.pass2Stats.commandCount} 条命令 · ${dual.pass2Stats.estimatedRuntimeLabel}`;
 }
 
 function officialPaletteRgb(index) {
@@ -2720,7 +2710,6 @@ function syncStudioUi() {
 
   els.sizeSelect.value = String(state.studio.canvasSize);
   els.brushSizeSelect.value = String(state.studio.brushSize);
-  els.brushShapeSelect.value = state.studio.brushShape;
   els.scaleRange.value = String(state.studio.imageScalePercent);
   els.scaleInput.value = String(state.studio.imageScalePercent);
   els.offsetXRange.value = String(state.studio.imageOffsetXPercent);
@@ -2754,7 +2743,7 @@ function syncStudioUi() {
   const backgroundHint = state.studio.removeBackground
     ? "已开启自动扣背景，会优先去掉白底、浅灰底和棋盘格假透明背景。"
     : "当前不会自动扣背景；如果素材是白底或棋盘格假透明图，建议开启。";
-  const brushDescription = `${state.studio.brushShape === "square" ? "方块" : "圆形"} ${state.studio.brushSize} 号笔`;
+  const squareBrushHint = "建议同时把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。";
   const scaleHint = `当前导入缩放是 ${state.studio.imageScalePercent}%，100% 表示完整放进画布。`;
   const speedHint = `绘制速度为按键 ${state.studio.buttonPressMs}ms / 间隔 ${state.studio.inputDelayMs}ms。`;
   const positionHint = describeImagePosition(
@@ -2763,15 +2752,12 @@ function syncStudioUi() {
   );
   els.studioModeHint.textContent =
     state.studio.colorMode === "mono"
-      ? `深色像素会绘制，浅色像素会保留为空白背景。当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再放进 256x256 脚本坐标画布，并自动切到 ${brushDescription} 从画布中心起步生成。${scaleHint}${positionHint}${speedHint}${backgroundHint}`
-      : state.studio.dualPass
-        ? `双遍模式会自动切到方3粗绘，再切方1橡皮擦掉透明外溢并切回方1笔补画。${scaleHint}${positionHint}${speedHint}开始前请保持右侧 9 个槽位默认颜色不变。${backgroundHint}`
-        : `当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再把图片压到 ${state.studio.colorCount} 个官方色以内，并映射到游戏内置的 7x12 官方色盘，再自动切到 ${brushDescription} 绘制。${scaleHint}${positionHint}${speedHint}开始前请保持右侧 9 个槽位默认颜色不变。${backgroundHint}`;
+      ? `深色像素会绘制，浅色像素会保留为空白背景。当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再放进 256x256 脚本坐标画布，并按 ${state.studio.brushSize} 号笔和画布中心起步生成。${scaleHint}${positionHint}${speedHint}${squareBrushHint}${backgroundHint}`
+      : `当前会先按 ${state.studio.imageScalePercent}% 调整图片大小，再把图片压到 ${state.studio.colorCount} 个官方色以内，并映射到游戏内置的 7x12 官方色盘，再按 ${state.studio.brushSize} 号笔生成。${scaleHint}${positionHint}${speedHint}开始前请保持右侧 9 个槽位默认颜色不变。${squareBrushHint}${backgroundHint}`;
   els.studioPortSelect.disabled = state.studio.busy || executionActive;
   els.refreshPortsButton.disabled = state.studio.busy || executionActive;
   els.sizeSelect.disabled = state.studio.busy || executionActive;
   els.brushSizeSelect.disabled = state.studio.busy || executionActive;
-  els.brushShapeSelect.disabled = state.studio.busy || executionActive || state.studio.dualPass;
   els.scaleRange.disabled = state.studio.busy || executionActive;
   els.scaleInput.disabled = state.studio.busy || executionActive;
   els.offsetXRange.disabled = state.studio.busy || executionActive;
@@ -2879,10 +2865,8 @@ function syncStudioUi() {
 
   els.executionHint.textContent =
     state.studio.colorMode === "mono"
-      ? `当前会把按 ${state.studio.imageScalePercent}% 缩放、${describeImagePosition(state.studio.imageOffsetXPercent, state.studio.imageOffsetYPercent, false)}后的 256x256 黑白脚本通过串口发送到 ${state.selectedPortPath}，由 ESP32 从画布中心起步，自动切到 ${brushDescription} 后继续翻译成方向键移动与 A 绘制。`
-      : state.studio.dualPass
-        ? `当前会把双遍官方色脚本通过串口发送到 ${state.selectedPortPath}。pass1 自动切方3粗绘；pass2 自动切方1橡皮擦透明外溢，再切回方1笔补画。请先保持右侧 9 个槽位默认颜色不变。`
-        : `当前会把按 ${state.studio.imageScalePercent}% 缩放、${describeImagePosition(state.studio.imageOffsetXPercent, state.studio.imageOffsetYPercent, false)}后的 256x256 官方色脚本通过串口发送到 ${state.selectedPortPath}。请先保持右侧 9 个槽位默认颜色不变，ESP32 会按这组默认槽位状态去配置内置 7x12 色盘，并自动切到 ${brushDescription} 绘制。`;
+      ? `当前会把按 ${state.studio.imageScalePercent}% 缩放、${describeImagePosition(state.studio.imageOffsetXPercent, state.studio.imageOffsetYPercent, false)}后的 256x256 黑白脚本通过串口发送到 ${state.selectedPortPath}，由 ESP32 从画布中心起步，按 ${state.studio.brushSize} 号笔继续翻译成方向键移动与 A 绘制。建议开始前把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。`
+      : `当前会把按 ${state.studio.imageScalePercent}% 缩放、${describeImagePosition(state.studio.imageOffsetXPercent, state.studio.imageOffsetYPercent, false)}后的 256x256 官方色脚本通过串口发送到 ${state.selectedPortPath}。请先保持右侧 9 个槽位默认颜色不变，ESP32 会按这组默认槽位状态去配置内置 7x12 色盘，并按 ${state.studio.brushSize} 号笔绘制。建议开始前把 Switch 里的笔刷切到方块笔刷，整体观感通常会更美观。`;
   renderStudioConnectionStatus();
 }
 
