@@ -382,6 +382,15 @@ function normalizeDitherAmount(value: unknown): number {
   return Math.max(0, Math.min(1, value));
 }
 
+function normalizeMergeThreshold(value: unknown, fallback = 40): number {
+  const parsed = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(0, Math.min(100, parsed));
+}
+
 function normalizeImageScalePercent(value: unknown, fallback = 100): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -531,7 +540,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     ditherAmount: normalizeDitherAmount(body.ditherAmount),
     colorDistanceMode: normalizeColorDistanceMode(body.colorDistanceMode),
     mergeSimilarColors: body.mergeSimilarColors === true,
-    mergeThreshold: Number(body.mergeThreshold ?? 40),
+    mergeThreshold: normalizeMergeThreshold(body.mergeThreshold),
     pathStrategy: body.pathStrategy === "nearest" ? ("nearest" as const) : ("scanline" as const),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
