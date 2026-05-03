@@ -369,7 +369,6 @@ void ClassicBtControllerTransport::clearConnectionState() {
   stackStarted_ = false;
   timer_ = 0;
   explicitInputActive_ = false;
-  inputReportSendEventCount_ = 0;
   initStep_ = "idle";
   initError_ = "none";
   ignoredReportCount_ = 0;
@@ -705,16 +704,14 @@ bool ClassicBtControllerTransport::isControllerInputReady() const {
   return isHidReportChannelOpen() && paired_;
 }
 
-bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure, bool waitForSendEvent) {
-  readyForReports_ = waitForSendEvent ? isControllerInputReady() : isHidReportChannelOpen();
+bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure) {
+  readyForReports_ = isHidReportChannelOpen();
 
   if (!readyForReports_) {
     if (logFailure) {
-      Serial.printf(
-          "WARN bt report skipped reason=%s connected=%s paired=%s\n",
-          waitForSendEvent && !paired_ ? "not-paired" : "not-ready",
-          boolName(connected_),
-          boolName(paired_));
+      Serial.printf("WARN bt report skipped reason=not-ready connected=%s paired=%s\n",
+                    boolName(connected_),
+                    boolName(paired_));
     }
     return false;
   }
@@ -724,7 +721,6 @@ bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure, bool 
   const bool shouldSendFullReport = connected_ || paired_;
   const uint8_t *payload = shouldSendFullReport ? report30_ : dummyReport_;
   const size_t payloadLength = shouldSendFullReport ? sizeof(report30_) : sizeof(dummyReport_);
-  const uint32_t expectedEventCount = inputReportSendEventCount_ + 1;
 
   const esp_err_t err = esp_bt_hid_device_send_report(
       ESP_HIDD_REPORT_TYPE_INTRDATA,
@@ -748,36 +744,6 @@ bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure, bool 
   }
 
   timer_ = static_cast<uint8_t>(timer_ + 1);
-  return waitForSendEvent ? waitForInputReportAccepted(expectedEventCount, logFailure) : true;
-}
-
-bool ClassicBtControllerTransport::waitForInputReportAccepted(
-    uint32_t expectedEventCount, bool logFailure) {
-  const uint32_t startedAt = millis();
-
-  while (inputReportSendEventCount_ < expectedEventCount) {
-    if (millis() - startedAt >= HID_SEND_REPORT_TIMEOUT_MS) {
-      if (logFailure) {
-        Serial.printf(
-            "WARN bt send_report timeout report=48 waited_ms=%u\n",
-            HID_SEND_REPORT_TIMEOUT_MS);
-      }
-      return false;
-    }
-    delay(1);
-  }
-
-  if (lastSendReportStatus_ != ESP_HIDD_SUCCESS || lastSendReportId_ != 0x30) {
-    if (logFailure) {
-      Serial.printf(
-          "WARN bt send_report rejected status=%d reason=%u report=%u\n",
-          lastSendReportStatus_,
-          lastSendReportReason_,
-          lastSendReportId_);
-    }
-    return false;
-  }
-
   return true;
 }
 
@@ -786,7 +752,10 @@ bool ClassicBtControllerTransport::repeatCurrentInputReport(
   const uint32_t startedAt = millis();
 
   while (true) {
-    if (!sendCurrentInputReport(logFailure, true)) {
+    // Treat the synchronous send result as authoritative here. Waiting for a
+    // separate SEND_REPORT event on every 16 ms repeat can spuriously abort
+    // long drawing sessions even while the controller link is still healthy.
+    if (!sendCurrentInputReport(logFailure)) {
       return false;
     }
 
@@ -1064,9 +1033,6 @@ void ClassicBtControllerTransport::handleHidEvent(int event, void *rawParam) {
       lastSendReportStatus_ = param->send_report.status;
       lastSendReportReason_ = param->send_report.reason;
       lastSendReportId_ = param->send_report.report_id;
-      if (param->send_report.report_id == 0x30) {
-        inputReportSendEventCount_ += 1;
-      }
       readyForReports_ = isHidReportChannelOpen();
       if (param->send_report.status != ESP_HIDD_SUCCESS) {
         Serial.printf(
@@ -1194,19 +1160,12 @@ void ClassicBtControllerTransport::updateInputReport() {}
 void ClassicBtControllerTransport::ensureSendTask() {}
 bool ClassicBtControllerTransport::isHidReportChannelOpen() const { return false; }
 bool ClassicBtControllerTransport::isControllerInputReady() const { return false; }
-bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure, bool waitForSendEvent) {
+bool ClassicBtControllerTransport::sendCurrentInputReport(bool logFailure) {
   (void)logFailure;
-  (void)waitForSendEvent;
   return false;
 }
 bool ClassicBtControllerTransport::repeatCurrentInputReport(uint16_t durationMs, bool logFailure) {
   (void)durationMs;
-  (void)logFailure;
-  return false;
-}
-bool ClassicBtControllerTransport::waitForInputReportAccepted(
-    uint32_t expectedEventCount, bool logFailure) {
-  (void)expectedEventCount;
   (void)logFailure;
   return false;
 }

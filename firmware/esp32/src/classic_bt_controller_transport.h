@@ -26,9 +26,8 @@ class ClassicBtControllerTransport : public ControllerTransport {
   void ensureSendTask();
   bool isHidReportChannelOpen() const;
   bool isControllerInputReady() const;
-  bool sendCurrentInputReport(bool logFailure, bool waitForSendEvent = false);
+  bool sendCurrentInputReport(bool logFailure);
   bool repeatCurrentInputReport(uint16_t durationMs, bool logFailure);
-  bool waitForInputReportAccepted(uint32_t expectedEventCount, bool logFailure);
   bool sendSubcommandReply(uint8_t reportId, const uint8_t *data, size_t length, const char *label);
   bool attemptVirtualCablePlug(const uint8_t peerAddress[6], const char *reason);
   void enterReconnectableState(const char *reason);
@@ -67,7 +66,6 @@ class ClassicBtControllerTransport : public ControllerTransport {
   uint8_t dummyReport_[11] = {};
   TaskHandle_t sendTaskHandle_ = nullptr;
   volatile bool explicitInputActive_ = false;
-  volatile uint32_t inputReportSendEventCount_ = 0;
   uint8_t lastPeerAddress_[6] = {};
   bool hasPeerAddress_ = false;
   uint32_t ignoredReportCount_ = 0;
