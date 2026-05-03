@@ -1,0 +1,1513 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tomodachi Life 调色板转换器</title>
+<style>
+  :root {
+    --bg: #ffc94a;
+    --panel: #fffceb;
+    --ink: #222;
+    --accent: #ff5a3c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", "PingFang SC", sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    text-align: center;
+    margin: 0 0 16px;
+    font-size: 28px;
+    text-shadow: 2px 2px 0 #fff;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 20px;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  @media (max-width: 880px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+  .panel {
+    background: var(--panel);
+    border-radius: 18px;
+    padding: 20px;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.08);
+  }
+  .controls label {
+    display: block;
+    margin-top: 14px;
+    font-weight: 600;
+    font-size: 13px;
+  }
+  .controls input[type="range"] {
+    width: 100%;
+  }
+  .controls select, .controls button {
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 2px solid #e2d8a8;
+    background: #fff;
+    font-size: 14px;
+    margin-top: 4px;
+  }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .row span { font-variant-numeric: tabular-nums; font-size: 12px; min-width: 36px; text-align: right; }
+  .btn {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 700;
+    border: none;
+    cursor: pointer;
+    margin-top: 16px;
+    padding: 12px;
+    transition: transform 0.1s;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.secondary { background: #444; }
+  .file-drop {
+    border: 2px dashed #e2b04a;
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    cursor: pointer;
+    background: #fffaf0;
+    font-size: 13px;
+  }
+  .file-drop.drag { background: #fff1c4; }
+  input[type=file] { display: none; }
+  .preview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 720px) {
+    .preview { grid-template-columns: 1fr; }
+  }
+  .preview > div {
+    text-align: center;
+  }
+  .preview h3 { margin: 0 0 8px; font-size: 14px; }
+  canvas, .preview img {
+    max-width: 100%;
+    height: auto;
+    image-rendering: pixelated;
+    background: repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 16px 16px;
+    border-radius: 8px;
+  }
+  .palette-grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: 4px;
+    margin-top: 10px;
+  }
+  .swatch {
+    aspect-ratio: 1/1;
+    border-radius: 6px;
+    border: 2px solid transparent;
+    cursor: pointer;
+    position: relative;
+  }
+  .swatch.off { opacity: 0.2; border-color: #999; }
+  .palette-actions { display: flex; gap: 6px; margin-top: 8px; }
+  .palette-actions button {
+    flex: 1; padding: 6px; border-radius: 8px; border: 1px solid #ccc;
+    background: #fff; cursor: pointer; font-size: 12px;
+  }
+  details { margin-top: 14px; }
+  summary { cursor: pointer; font-weight: 600; font-size: 13px; }
+  small { color: #666; }
+  .tabs {
+    display: flex; gap: 6px;
+    max-width: 1400px;
+    margin: 0 auto 0;
+    padding: 0 4px;
+  }
+  .tab {
+    padding: 10px 18px;
+    background: rgba(255,255,255,0.5);
+    border: none;
+    border-radius: 14px 14px 0 0;
+    cursor: pointer;
+    font-weight: 700;
+    color: #5a3e00;
+    font-size: 14px;
+  }
+  .tab.active {
+    background: var(--panel);
+    color: #222;
+    box-shadow: 0 -4px 0 rgba(0,0,0,0.04);
+  }
+  iframe.legacy-frame {
+    display: block;
+    width: 100%;
+    max-width: 1400px;
+    margin: 0 auto;
+    height: calc(100vh - 100px);
+    border: 0;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 4px 0 rgba(0,0,0,0.08);
+  }
+</style>
+</head>
+<body>
+  <div class="tabs">
+    <button class="tab active" data-tab="studio">🎨 图像与脚本</button>
+    <button class="tab" data-tab="legacy">🔧 手柄 / 刷固件</button>
+  </div>
+
+  <div data-tab-pane="studio">
+  <h1 style="margin-top:8px;">Tomodachi Life 全功能工坊</h1>
+  <div class="layout">
+    <div class="panel controls">
+      <label class="file-drop" id="drop">
+        点击或拖拽上传图片
+        <input type="file" id="file" accept="image/*" />
+      </label>
+
+      <label>抖动算法
+        <select id="dither">
+          <option value="none">无</option>
+          <option value="fs" selected>Floyd-Steinberg</option>
+          <option value="atkinson">Atkinson</option>
+          <option value="ordered">有序抖动 (Bayer 4x4)</option>
+        </select>
+      </label>
+
+      <label>颜色距离
+        <select id="distance">
+          <option value="weighted" selected>加权 RGB（推荐）</option>
+          <option value="rgb">欧氏 RGB</option>
+          <option value="lab">CIE Lab (Δ E76)</option>
+        </select>
+      </label>
+
+      <label>抖动强度 <span id="ditherAmtV">100%</span>
+        <input type="range" id="ditherAmt" min="0" max="100" value="100" />
+      </label>
+
+      <label>亮度 <span id="brightV">0</span>
+        <input type="range" id="bright" min="-100" max="100" value="0" />
+      </label>
+      <label>对比度 <span id="contV">0</span>
+        <input type="range" id="cont" min="-100" max="100" value="0" />
+      </label>
+      <label>饱和度 <span id="satV">0</span>
+        <input type="range" id="sat" min="-100" max="100" value="0" />
+      </label>
+
+      <label>裁剪方式
+        <select id="fit">
+          <option value="cover" selected>填满 (cover，居中裁剪)</option>
+          <option value="contain">完整 (contain，留白)</option>
+          <option value="stretch">拉伸</option>
+        </select>
+      </label>
+
+      <label>显示放大 <span id="zoomV">2×</span>
+        <input type="range" id="zoom" min="1" max="6" value="2" />
+      </label>
+
+      <details open>
+        <summary>调色板 (点击启用/禁用)</summary>
+        <div class="palette-actions">
+          <button id="palAll">全选</button>
+          <button id="palNone">全不选</button>
+          <button id="palMain">仅主色</button>
+        </div>
+        <div class="palette-grid" id="palette"></div>
+      </details>
+
+      <button class="btn" id="process">✨ 开始转换</button>
+      <button class="btn secondary" id="download">⬇️ 下载 PNG</button>
+
+      <details open style="margin-top:18px;border-top:2px dashed #e2b04a;padding-top:10px;">
+        <summary>🤖 Friend Maker 脚本生成</summary>
+        <label>跳过颜色（不绘制）
+          <select id="skipColor"></select>
+        </label>
+        <label>起始光标位置
+          <select id="startPos">
+            <option value="center" selected>画布中心 (推荐)</option>
+            <option value="top-left">左上角</option>
+            <option value="home">先 Home 再到左上</option>
+          </select>
+        </label>
+        <label>绘制顺序
+          <select id="order">
+            <option value="components" selected>按连通块（先画完一块再跳）</option>
+            <option value="serpentine">蛇形扫描整张</option>
+            <option value="raster">逐行扫描</option>
+          </select>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="useLine" checked style="width:auto;" />
+          <span style="font-weight:600;font-size:13px;">合并同色横向连续像素 (L 命令)</span>
+        </label>
+        <label class="row">
+          <input type="checkbox" id="dualPass" style="width:auto;" />
+          <span style="font-weight:600;font-size:13px;">双遍模式 (brush 3 粗 + brush 1 细)</span>
+        </label>
+        <label>速度预设
+          <select id="speed">
+            <option value="100,100">默认 100/100 (≈200ms/像素，最稳)</option>
+            <option value="60,60" selected>较快 60/60 (≈120ms，常稳)</option>
+            <option value="40,40">激进 40/40 (≈80ms，多数稳)</option>
+            <option value="25,25">极限 25/25 (≈50ms，可能丢)</option>
+            <option value="custom">自定义...</option>
+          </select>
+        </label>
+        <div id="speedCustom" class="row" style="display:none;gap:6px;align-items:center;font-size:12px;">
+          按键 <input type="number" id="speedPress" min="16" max="500" value="60" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:6px;" />ms
+          间隔 <input type="number" id="speedDelay" min="16" max="500" value="60" style="width:60px;padding:4px;border:1px solid #ccc;border-radius:6px;" />ms
+        </div>
+        <button class="btn" id="genScript" style="background:#2a8f4f;">📜 生成脚本</button>
+
+        <div id="singleBtns" class="row" style="margin-top:8px;gap:6px;">
+          <button class="btn secondary" id="copyScript" style="margin:0;flex:1;">📋 复制</button>
+          <button class="btn secondary" id="downloadScript" style="margin:0;flex:1;">⬇️ .txt</button>
+        </div>
+
+        <div id="dualBtns" style="display:none;margin-top:8px;">
+          <div style="font-size:12px;font-weight:600;margin-bottom:4px;">第 1 遍 (brush 3 粗)</div>
+          <div class="row" style="gap:6px;">
+            <button class="btn secondary" id="copyP1" style="margin:0;flex:1;">📋 复制</button>
+            <button class="btn secondary" id="dlP1" style="margin:0;flex:1;">⬇️ pass1.txt</button>
+          </div>
+          <div style="font-size:12px;font-weight:600;margin:8px 0 4px;">第 2 遍 (brush 1 细)</div>
+          <div class="row" style="gap:6px;">
+            <button class="btn secondary" id="copyP2" style="margin:0;flex:1;">📋 复制</button>
+            <button class="btn secondary" id="dlP2" style="margin:0;flex:1;">⬇️ pass2.txt</button>
+          </div>
+          <small style="display:block;margin-top:6px;color:#666;line-height:1.4;">
+            跑完粗脚本后，先在游戏里把笔刷切到 1（光标会自动回中心、调色板会重置），再跑细脚本。
+          </small>
+        </div>
+
+        <small id="scriptStat"></small>
+      </details>
+
+      <details style="margin-top:14px;">
+        <summary>📡 在线执行（连接到 Friend Maker）</summary>
+        <label>串口 <button id="refreshPorts" type="button" style="float:right;font-size:11px;padding:2px 8px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;">刷新</button>
+          <select id="portSel"></select>
+        </label>
+        <div class="row" style="gap:6px;margin-top:8px;">
+          <button class="btn" id="runScript" style="margin:0;flex:1;background:#1976d2;">▶️ 运行脚本</button>
+        </div>
+        <div id="dualRunBtns" style="display:none;margin-top:6px;">
+          <div class="row" style="gap:6px;">
+            <button class="btn" id="runP1" style="margin:0;flex:1;background:#1976d2;">▶️ 跑粗 (brush 3)</button>
+            <button class="btn" id="runP2" style="margin:0;flex:1;background:#1976d2;">▶️ 跑细 (brush 1)</button>
+          </div>
+        </div>
+        <div class="row" style="gap:6px;margin-top:6px;">
+          <button class="btn secondary" id="pauseExec" style="margin:0;flex:1;" disabled>⏸ 暂停</button>
+          <button class="btn secondary" id="resumeExec" style="margin:0;flex:1;" disabled>▶️ 继续</button>
+          <button class="btn secondary" id="stopExec" style="margin:0;flex:1;background:#c0392b;" disabled>⏹ 停止</button>
+        </div>
+        <div style="margin-top:8px;height:8px;background:#eee;border-radius:4px;overflow:hidden;">
+          <div id="execBar" style="height:100%;width:0;background:#1976d2;transition:width 0.2s;"></div>
+        </div>
+        <small id="execStat" style="display:block;margin-top:4px;"></small>
+        <small id="execTimer" style="display:block;margin-top:2px;color:#666;"></small>
+      </details>
+
+      <small id="status"></small>
+    </div>
+
+    <div class="panel">
+      <div class="preview">
+        <div>
+          <h3>原图</h3>
+          <canvas id="src"></canvas>
+        </div>
+        <div>
+          <h3>转换后</h3>
+          <canvas id="out"></canvas>
+        </div>
+      </div>
+      <div id="simSingleWrap" style="margin-top:18px;text-align:center;">
+        <h3 style="margin:0 0 8px;font-size:14px;">脚本回放 <small style="font-weight:400;color:#666;" id="simInfo"></small></h3>
+        <canvas id="sim"></canvas>
+      </div>
+      <div id="simDualWrap" class="preview" style="display:none;margin-top:18px;">
+        <div>
+          <h3>3 像素预览 <small style="font-weight:400;color:#666;" id="simP1Info"></small></h3>
+          <canvas id="simP1"></canvas>
+        </div>
+        <div>
+          <h3>1 像素修正后预览 <small style="font-weight:400;color:#666;" id="simP2Info"></small></h3>
+          <canvas id="simP2"></canvas>
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+
+  <div data-tab-pane="legacy" hidden>
+    <iframe class="legacy-frame" id="legacyFrame" src="about:blank" loading="lazy" title="手柄与固件"></iframe>
+  </div>
+
+<script>
+// ---------- Palette (Tomodachi Life) ----------
+// 7 rows × 11 main columns + 1 special column (rightmost vivid colors)
+const PALETTE = [
+  // Row 1 (lights)
+  [255,255,255],[241,239,248],[240,240,248],[240,247,255],[240,251,244],[240,244,238],[245,250,240],[253,253,238],[254,243,239],[250,240,240],[253,237,220],[254,37,0],
+  // Row 2
+  [235,235,235],[207,200,233],[199,205,231],[200,233,253],[200,241,215],[199,219,200],[218,238,200],[251,249,200],[252,214,201],[239,201,200],[228,207,176],[255,251,0],
+  // Row 3
+  [213,213,211],[165,146,215],[145,159,213],[146,230,186],[146,189,186],[146,189,148],[187,226,148],[250,245,146],[251,180,145],[226,150,145],[202,169,118],[7,249,0],
+  // Row 4
+  [188,188,188],[101,39,194],[0,74,192],[6,194,254],[0,218,144],[1,150,22],[146,211,20],[249,240,0],[247,132,0],[212,39,0],[145,97,13],[2,253,255],
+  // Row 5
+  [156,157,154],[86,32,170],[0,63,164],[2,165,216],[3,188,123],[3,128,14],[125,181,12],[214,206,0],[213,113,0],[182,33,0],[119,66,0],[4,50,254],
+  // Row 6
+  [114,114,114],[66,23,133],[0,50,129],[0,132,171],[0,147,96],[0,101,12],[98,142,13],[169,162,0],[168,88,1],[144,22,0],[93,56,12],[136,54,255],
+  // Row 7 (darks)
+  [0,0,0],[34,9,76],[0,22,72],[1,73,99],[2,84,53],[1,56,0],[53,81,0],[96,93,0],[96,46,1],[81,12,1],[52,34,13],[255,54,195],
+];
+// Indices 11,23,35,47,59,71,83 are the "vivid" rightmost column
+const VIVID_INDICES = new Set([11,23,35,47,59,71,83]);
+
+// ---------- Color helpers ----------
+function rgb2lab([r,g,b]){
+  r/=255; g/=255; b/=255;
+  r = r>0.04045 ? Math.pow((r+0.055)/1.055,2.4) : r/12.92;
+  g = g>0.04045 ? Math.pow((g+0.055)/1.055,2.4) : g/12.92;
+  b = b>0.04045 ? Math.pow((b+0.055)/1.055,2.4) : b/12.92;
+  let x = (r*0.4124 + g*0.3576 + b*0.1805)/0.95047;
+  let y = (r*0.2126 + g*0.7152 + b*0.0722)/1.00000;
+  let z = (r*0.0193 + g*0.1192 + b*0.9505)/1.08883;
+  const f = t => t>0.008856 ? Math.cbrt(t) : (7.787*t + 16/116);
+  x=f(x); y=f(y); z=f(z);
+  return [116*y-16, 500*(x-y), 200*(y-z)];
+}
+
+let LAB_CACHE = null;
+function buildLabCache(){ LAB_CACHE = PALETTE.map(rgb2lab); }
+buildLabCache();
+
+function nearestColor(r,g,b, mode, enabledMask){
+  let best = 0, bestD = Infinity;
+  if (mode === 'lab'){
+    const [L,A,B] = rgb2lab([r,g,b]);
+    for (let i=0;i<PALETTE.length;i++){
+      if (!enabledMask[i]) continue;
+      const [pl,pa,pb] = LAB_CACHE[i];
+      const d = (L-pl)*(L-pl)+(A-pa)*(A-pa)+(B-pb)*(B-pb);
+      if (d<bestD){ bestD=d; best=i; }
+    }
+  } else if (mode === 'weighted'){
+    for (let i=0;i<PALETTE.length;i++){
+      if (!enabledMask[i]) continue;
+      const [pr,pg,pb] = PALETTE[i];
+      const rm = (r+pr)/2;
+      const dr=r-pr, dg=g-pg, db=b-pb;
+      const d = (((512+rm)*dr*dr)>>8) + 4*dg*dg + (((767-rm)*db*db)>>8);
+      if (d<bestD){ bestD=d; best=i; }
+    }
+  } else {
+    for (let i=0;i<PALETTE.length;i++){
+      if (!enabledMask[i]) continue;
+      const [pr,pg,pb] = PALETTE[i];
+      const dr=r-pr, dg=g-pg, db=b-pb;
+      const d = dr*dr+dg*dg+db*db;
+      if (d<bestD){ bestD=d; best=i; }
+    }
+  }
+  return best;
+}
+
+// ---------- DOM ----------
+const $ = id => document.getElementById(id);
+const fileInput = $('file');
+const drop = $('drop');
+const srcCanvas = $('src');
+const outCanvas = $('out');
+const status = $('status');
+const paletteEl = $('palette');
+
+let srcImage = null;
+let enabled = PALETTE.map(()=>true);
+// indexMap[y*256+x] = palette index (0..83), -1 = not drawn
+let indexMap = null;
+let lastScript = '';
+let lastPass1 = '';
+let lastPass2 = '';
+let lastDualMaps = null;
+
+function renderPalette(){
+  paletteEl.innerHTML='';
+  PALETTE.forEach((c,i)=>{
+    const d = document.createElement('div');
+    d.className = 'swatch' + (enabled[i]?'':' off');
+    d.style.background = `rgb(${c[0]},${c[1]},${c[2]})`;
+    d.title = `${c.join(', ')}`;
+    d.onclick = ()=>{ enabled[i]=!enabled[i]; renderPalette(); };
+    paletteEl.appendChild(d);
+  });
+}
+renderPalette();
+
+$('palAll').onclick = ()=>{ enabled = enabled.map(()=>true); renderPalette(); };
+$('palNone').onclick = ()=>{ enabled = enabled.map(()=>false); renderPalette(); };
+$('palMain').onclick = ()=>{ enabled = enabled.map((_,i)=>!VIVID_INDICES.has(i)); renderPalette(); };
+
+// File handling (label wraps input, so clicking already opens picker)
+fileInput.onchange = e => loadFile(e.target.files[0]);
+['dragenter','dragover'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('drag');}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('drag');}));
+drop.addEventListener('drop', e=>{ if(e.dataTransfer.files[0]) loadFile(e.dataTransfer.files[0]); });
+
+function loadFile(file){
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = new Image();
+  img.onload = ()=>{
+    srcImage = img;
+    drawSource();
+    process();
+    URL.revokeObjectURL(url);
+  };
+  img.src = url;
+}
+
+const OUT_SIZE = 256;
+
+function drawSource(){
+  const max = 512;
+  const scale = Math.min(1, max / Math.max(srcImage.width, srcImage.height));
+  const w = Math.round(srcImage.width * scale);
+  const h = Math.round(srcImage.height * scale);
+  srcCanvas.width = w; srcCanvas.height = h;
+  const ctx = srcCanvas.getContext('2d');
+  ctx.drawImage(srcImage, 0, 0, w, h);
+}
+
+// Draw the source image into a 256x256 canvas using the selected fit mode
+function drawTo256(target){
+  const ctx = target.getContext('2d');
+  target.width = OUT_SIZE; target.height = OUT_SIZE;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0,0,OUT_SIZE,OUT_SIZE);
+
+  const fit = $('fit').value;
+  const iw = srcImage.width, ih = srcImage.height;
+
+  if (fit === 'stretch'){
+    ctx.drawImage(srcImage, 0,0, OUT_SIZE, OUT_SIZE);
+  } else if (fit === 'contain'){
+    const s = Math.min(OUT_SIZE/iw, OUT_SIZE/ih);
+    const w = iw*s, h = ih*s;
+    ctx.drawImage(srcImage, (OUT_SIZE-w)/2, (OUT_SIZE-h)/2, w, h);
+  } else { // cover
+    const s = Math.max(OUT_SIZE/iw, OUT_SIZE/ih);
+    const w = iw*s, h = ih*s;
+    ctx.drawImage(srcImage, (OUT_SIZE-w)/2, (OUT_SIZE-h)/2, w, h);
+  }
+}
+
+// Bayer 4x4 matrix
+const BAYER4 = [
+  [ 0, 8, 2,10],
+  [12, 4,14, 6],
+  [ 3,11, 1, 9],
+  [15, 7,13, 5],
+].map(r=>r.map(v=>v/16 - 0.5));
+
+function applyAdjustments(data, brightness, contrast, saturation){
+  const b = brightness; // -100..100
+  const c = (contrast+100)/100; // contrast multiplier
+  const s = (saturation+100)/100;
+  for (let i=0;i<data.length;i+=4){
+    let r=data[i], g=data[i+1], bl=data[i+2];
+    // brightness
+    r+=b; g+=b; bl+=b;
+    // contrast around 128
+    r = (r-128)*c + 128;
+    g = (g-128)*c + 128;
+    bl = (bl-128)*c + 128;
+    // saturation (against luminance)
+    const lum = 0.299*r + 0.587*g + 0.114*bl;
+    r = lum + (r-lum)*s;
+    g = lum + (g-lum)*s;
+    bl = lum + (bl-lum)*s;
+    data[i] = Math.max(0,Math.min(255,r));
+    data[i+1] = Math.max(0,Math.min(255,g));
+    data[i+2] = Math.max(0,Math.min(255,bl));
+  }
+}
+
+function process(){
+  if (!srcImage){ status.textContent='请先上传图片'; return; }
+  const t0 = performance.now();
+  lastScript = '';
+  lastPass1 = '';
+  lastPass2 = '';
+  lastDualMaps = null;
+
+  // 1. Draw preview source
+  drawSource();
+
+  // 2. Resample directly to fixed 256x256 with selected fit mode
+  const pw = OUT_SIZE, ph = OUT_SIZE;
+  const tmp = document.createElement('canvas');
+  drawTo256(tmp);
+  const tctx = tmp.getContext('2d');
+
+  const imgData = tctx.getImageData(0,0,pw,ph);
+  const data = imgData.data;
+
+  // 3. Adjustments
+  applyAdjustments(data, +$('bright').value, +$('cont').value, +$('sat').value);
+
+  // 4. Quantize (with optional dither)
+  const mode = $('distance').value;
+  const dither = $('dither').value;
+  const amt = +$('ditherAmt').value / 100;
+
+  // Use Float32 buffer for dithering accumulation
+  const buf = new Float32Array(pw*ph*3);
+  for (let i=0,j=0; i<data.length; i+=4, j+=3){
+    buf[j]=data[i]; buf[j+1]=data[i+1]; buf[j+2]=data[i+2];
+  }
+
+  // (re)allocate index map
+  indexMap = new Int16Array(pw*ph);
+
+  function getIdx(x,y){ return (y*pw+x)*3; }
+  function setOut(i, pIdx){
+    const c = PALETTE[pIdx];
+    data[i]=c[0]; data[i+1]=c[1]; data[i+2]=c[2];
+    indexMap[i>>2] = pIdx;
+  }
+
+  // Ensure at least one color enabled
+  if (!enabled.some(v=>v)){ status.textContent='请至少启用一种颜色'; return; }
+
+  if (dither === 'none'){
+    for (let i=0,j=0; i<data.length; i+=4, j+=3){
+      const pi = nearestColor(buf[j],buf[j+1],buf[j+2], mode, enabled);
+      setOut(i, pi);
+    }
+  } else if (dither === 'ordered'){
+    for (let y=0;y<ph;y++){
+      for (let x=0;x<pw;x++){
+        const j=getIdx(x,y), i=(y*pw+x)*4;
+        const t = BAYER4[y%4][x%4]*64*amt;
+        const r = buf[j]+t, g = buf[j+1]+t, b = buf[j+2]+t;
+        const pi = nearestColor(r,g,b, mode, enabled);
+        setOut(i, pi);
+      }
+    }
+  } else {
+    // Error-diffusion
+    const isFS = dither === 'fs';
+    for (let y=0;y<ph;y++){
+      for (let x=0;x<pw;x++){
+        const j=getIdx(x,y), i=(y*pw+x)*4;
+        const oR=buf[j], oG=buf[j+1], oB=buf[j+2];
+        const pi = nearestColor(oR,oG,oB, mode, enabled);
+        const c = PALETTE[pi];
+        setOut(i, pi);
+        const eR=(oR-c[0])*amt, eG=(oG-c[1])*amt, eB=(oB-c[2])*amt;
+        if (isFS){
+          if (x+1<pw) addErr(buf, x+1,y, eR,eG,eB, 7/16, pw);
+          if (y+1<ph){
+            if (x>0)    addErr(buf, x-1,y+1, eR,eG,eB, 3/16, pw);
+                        addErr(buf, x,  y+1, eR,eG,eB, 5/16, pw);
+            if (x+1<pw) addErr(buf, x+1,y+1, eR,eG,eB, 1/16, pw);
+          }
+        } else { // Atkinson
+          const w8 = 1/8;
+          if (x+1<pw) addErr(buf, x+1,y, eR,eG,eB, w8, pw);
+          if (x+2<pw) addErr(buf, x+2,y, eR,eG,eB, w8, pw);
+          if (y+1<ph){
+            if (x>0)    addErr(buf, x-1,y+1, eR,eG,eB, w8, pw);
+                        addErr(buf, x,  y+1, eR,eG,eB, w8, pw);
+            if (x+1<pw) addErr(buf, x+1,y+1, eR,eG,eB, w8, pw);
+          }
+          if (y+2<ph)   addErr(buf, x,  y+2, eR,eG,eB, w8, pw);
+        }
+      }
+    }
+  }
+
+  tctx.putImageData(imgData,0,0);
+
+  // 5. Output canvas is always 256x256 (display via CSS zoom)
+  outCanvas.width = OUT_SIZE; outCanvas.height = OUT_SIZE;
+  const octx = outCanvas.getContext('2d');
+  octx.imageSmoothingEnabled = false;
+  octx.drawImage(tmp, 0, 0);
+
+  const zoom = +$('zoom').value;
+  outCanvas.style.width = (OUT_SIZE*zoom)+'px';
+  outCanvas.style.height = (OUT_SIZE*zoom)+'px';
+  outCanvas.style.maxWidth = '100%';
+
+  // Refresh skip-color dropdown with the colors that ended up in the image
+  refreshSkipColors();
+  drawDualPassPreview();
+
+  const dt = (performance.now()-t0).toFixed(0);
+  status.textContent = `完成 256×256，用时 ${dt}ms`;
+}
+
+function refreshSkipColors(){
+  const sel = $('skipColor');
+  if (!indexMap) return;
+  const counts = new Map();
+  for (let i=0;i<indexMap.length;i++){
+    const v = indexMap[i];
+    counts.set(v, (counts.get(v)||0)+1);
+  }
+  const prev = sel.value;
+  sel.innerHTML = '';
+  const optNone = document.createElement('option');
+  optNone.value = '-1';
+  optNone.textContent = '不跳过 (绘制全部)';
+  sel.appendChild(optNone);
+  // Sort by count desc — most likely background first
+  const entries = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+  for (const [pi, n] of entries){
+    const opt = document.createElement('option');
+    opt.value = String(pi);
+    const c = PALETTE[pi];
+    const r=c[0],g=c[1],b=c[2];
+    const isLight = (r+g+b)/3 > 200;
+    opt.textContent = `${isLight?'浅':''}rgb(${r},${g},${b}) — ${n} px`;
+    sel.appendChild(opt);
+  }
+  // Default to whitest color (index 0 = 255,255,255) if present
+  if (prev && counts.has(+prev)) {
+    sel.value = prev;
+  } else if (counts.has(0)) {
+    sel.value = '0';
+  } else {
+    sel.value = entries[0] ? String(entries[0][0]) : '-1';
+  }
+}
+
+// ---------- Script generation ----------
+// ---------- Path-planning helpers (used by emitScript) ----------
+function bucketByRow(pixels){
+  const rows = new Map();
+  for (const p of pixels){
+    let r = rows.get(p.y);
+    if (!r){ r = []; rows.set(p.y, r); }
+    r.push(p);
+  }
+  return rows;
+}
+function entryCandidates(rows){
+  const ys = [...rows.keys()];
+  if (ys.length === 0) return [];
+  const yMin = Math.min(...ys), yMax = Math.max(...ys);
+  const top = rows.get(yMin).slice().sort((a,b)=>a.x-b.x);
+  const bot = rows.get(yMax).slice().sort((a,b)=>a.x-b.x);
+  return [
+    { x: top[0].x, y: yMin, fromBottom:false },
+    { x: top[top.length-1].x, y: yMin, fromBottom:false },
+    { x: bot[0].x, y: yMax, fromBottom:true },
+    { x: bot[bot.length-1].x, y: yMax, fromBottom:true },
+  ];
+}
+function findComponents(pixels){
+  const set = new Map();
+  for (const p of pixels) set.set(p.x + p.y * 65536, p);
+  const visited = new Set();
+  const components = [];
+  for (const p of pixels){
+    const key = p.x + p.y * 65536;
+    if (visited.has(key)) continue;
+    const stack = [p];
+    visited.add(key);
+    const comp = [];
+    while (stack.length){
+      const c = stack.pop();
+      comp.push(c);
+      const ns = [
+        c.x+1 + c.y*65536, c.x-1 + c.y*65536,
+        c.x + (c.y+1)*65536, c.x + (c.y-1)*65536,
+      ];
+      for (const nk of ns){
+        if (visited.has(nk)) continue;
+        const n = set.get(nk);
+        if (!n) continue;
+        visited.add(nk);
+        stack.push(n);
+      }
+    }
+    components.push(comp);
+  }
+  return components;
+}
+
+// Emit a complete, independent script (CFG..E) for a cell map at given stride.
+// map[by*W+bx] = palette index (0..83), or skipColor / -1 to skip.
+// Cells are stamped at canvas coord (bx*stride + offset, by*stride + offset).
+function emitScript({ map, W, H, stride, offset, skip, startPos, useLine, order }){
+  const SIZE = OUT_SIZE; // 256
+  const SLOTS = 9;
+  const lines = [];
+  const speedSel = $('speed').value;
+  let press = 100, delay = 100;
+  if (speedSel === 'custom'){
+    press = +$('speedPress').value || 100;
+    delay = +$('speedDelay').value || 100;
+  } else {
+    const [p,d] = speedSel.split(',').map(Number);
+    press = p; delay = d;
+  }
+  lines.push(`CFG INPUT ${press} ${delay} 1800`);
+
+  let cur = { x: 0, y: 0 };
+  if (startPos === 'center'){
+    lines.push(`M ${-(SIZE>>1)} ${-(SIZE>>1)}`);
+  } else {
+    lines.push('H');
+  }
+
+  // Group cells by color (using cell coords)
+  const byColor = new Map();
+  for (let by=0; by<H; by++){
+    for (let bx=0; bx<W; bx++){
+      const pi = map[by*W+bx];
+      if (pi < 0 || pi === skip) continue;
+      let arr = byColor.get(pi);
+      if (!arr){ arr = []; byColor.set(pi, arr); }
+      arr.push({ x: bx, y: by });
+    }
+  }
+  if (byColor.size === 0){
+    lines.push('E');
+    return { script: lines.join('\n')+'\n', stats: { commands: lines.length, pixels:0, runs:0, colors:0, steps:0 } };
+  }
+
+  const toCx = bx => bx * stride + offset;
+  const toCy = by => by * stride + offset;
+
+  const colorOrder = [...byColor.keys()].sort((a,b)=>byColor.get(b).length - byColor.get(a).length);
+  let pixelsDrawn = 0, runs = 0, didReset = false;
+
+  for (let batchStart = 0; batchStart < colorOrder.length; batchStart += SLOTS){
+    const batch = colorOrder.slice(batchStart, batchStart + SLOTS);
+    if (!didReset){ lines.push('BC RESET'); didReset = true; }
+    batch.forEach((pi, slot)=>{
+      const row = Math.floor(pi / 12), col = pi % 12;
+      lines.push(`BC ${slot} ${row} ${col}`);
+    });
+
+    let curSlot = -1;
+    for (let s=0; s<batch.length; s++){
+      const pi = batch[s];
+      if (curSlot !== s){ lines.push(`C ${s}`); curSlot = s; }
+
+      const pixels = byColor.get(pi);
+      const groups = order === 'components' ? findComponents(pixels) : [pixels];
+
+      const remaining = groups.slice();
+      while (remaining.length > 0){
+        let bestI = 0, bestD = Infinity, bestRows = null, bestY = null;
+        for (let gi=0; gi<remaining.length; gi++){
+          const rows = bucketByRow(remaining[gi]);
+          for (const c of entryCandidates(rows)){
+            const cx = toCx(c.x), cy = toCy(c.y);
+            const d = Math.abs(cx - cur.x) + Math.abs(cy - cur.y);
+            if (d < bestD){ bestD = d; bestI = gi; bestRows = rows; bestY = c.fromBottom; }
+          }
+        }
+        const rowsMap = bestRows, fromBottom = bestY;
+        remaining.splice(bestI, 1);
+
+        const sortedY = [...rowsMap.keys()].sort((a,b)=>a-b);
+        if (fromBottom) sortedY.reverse();
+
+        const firstRow = rowsMap.get(sortedY[0]).slice().sort((a,b)=>a.x-b.x);
+        const distLeft = Math.abs(toCx(firstRow[0].x) - cur.x);
+        const distRight = Math.abs(toCx(firstRow[firstRow.length-1].x) - cur.x);
+        const reverseFirst = distRight < distLeft;
+
+        for (let ri=0; ri<sortedY.length; ri++){
+          const y = sortedY[ri];
+          const row = rowsMap.get(y).slice().sort((a,b)=>a.x-b.x);
+          const reverse = (order === 'raster') ? false :
+            (reverseFirst ? (ri % 2 === 0) : (ri % 2 === 1));
+          const ordered = reverse ? row.slice().reverse() : row;
+
+          let i = 0;
+          while (i < ordered.length){
+            let j = i;
+            if (useLine){
+              const dir = reverse ? -1 : 1;
+              while (j+1 < ordered.length && ordered[j+1].x === ordered[j].x + dir){ j++; }
+            }
+            const start = ordered[i], end = ordered[j];
+            const tx = toCx(start.x), ty = toCy(start.y);
+            const dx = tx - cur.x, dy = ty - cur.y;
+            if (dx !== 0 || dy !== 0) lines.push(`M ${dx} ${dy}`);
+            if (i === j){
+              lines.push('P');
+            } else {
+              lines.push(`L ${toCx(end.x) - toCx(start.x)} 0`);
+            }
+            cur = { x: toCx(end.x), y: toCy(end.y) };
+            pixelsDrawn += (j - i + 1);
+            runs++;
+            i = j + 1;
+          }
+        }
+      }
+    }
+  }
+
+  lines.push('E');
+  // step estimate (M/L moves + P presses)
+  let steps = 0;
+  for (const ln of lines){
+    if (ln.startsWith('M ') || ln.startsWith('L ')){
+      const p = ln.split(' ');
+      steps += Math.abs(+p[1]) + Math.abs(+p[2]||0) + (ln[0]==='L'?1:0);
+    } else if (ln === 'P') steps += 1;
+  }
+  return {
+    script: lines.join('\n') + '\n',
+    stats: { commands: lines.length, pixels: pixelsDrawn, runs, colors: byColor.size, steps, msPerStep: press + delay },
+  };
+}
+
+function fmtTime(ms){
+  const min = Math.floor(ms/60000);
+  const sec = Math.floor((ms%60000)/1000);
+  return `${min}分${sec}秒`;
+}
+
+function buildDualPassMaps(skip){
+  if (!indexMap) return null;
+  const SIZE = OUT_SIZE;
+  const C = Math.floor(SIZE / 3); // 85 coarse brush cells, stamped at x/y 1..253
+  const coarse = new Int16Array(C*C);
+
+  for (let by=0; by<C; by++){
+    for (let bx=0; bx<C; bx++){
+      const counts = new Map();
+      for (let dy=0; dy<3; dy++){
+        for (let dx=0; dx<3; dx++){
+          const pi = indexMap[(by*3+dy)*SIZE + (bx*3+dx)];
+          counts.set(pi, (counts.get(pi)||0)+1);
+        }
+      }
+      let best = -1, bestN = 0;
+      for (const [pi,n] of counts){ if (n > bestN){ best = pi; bestN = n; } }
+      coarse[by*C+bx] = best;
+    }
+  }
+
+  // Pass 2 only draws target pixels that differ from the pass-1 3x3 stamp.
+  const diff = new Int16Array(SIZE*SIZE);
+  for (let y=0; y<SIZE; y++){
+    for (let x=0; x<SIZE; x++){
+      const target = indexMap[y*SIZE+x];
+      if (target === skip){ diff[y*SIZE+x] = skip; continue; }
+      let pass1 = -1;
+      const bx = Math.floor(x/3), by = Math.floor(y/3);
+      if (bx < C && by < C){
+        const cc = coarse[by*C+bx];
+        if (cc !== skip) pass1 = cc;
+      }
+      diff[y*SIZE+x] = (pass1 === target) ? skip : target;
+    }
+  }
+
+  return { coarse, diff, coarseSize: C };
+}
+
+function setupPreviewCanvas(id){
+  const c = $(id);
+  const z = +$('zoom').value;
+  c.width = OUT_SIZE; c.height = OUT_SIZE;
+  c.style.width = (OUT_SIZE*z)+'px';
+  c.style.height = (OUT_SIZE*z)+'px';
+  c.style.maxWidth = '100%';
+  const ctx = c.getContext('2d');
+  ctx.imageSmoothingEnabled = false;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, OUT_SIZE, OUT_SIZE);
+  return ctx;
+}
+
+function drawPalettePixel(ctx, x, y, pi, size=1){
+  if (pi < 0) return;
+  const c = PALETTE[pi];
+  ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+  ctx.fillRect(x, y, size, size);
+}
+
+function drawDualPassPreview(){
+  const isDual = $('dualPass').checked && !!indexMap;
+  $('simSingleWrap').style.display = isDual ? 'none' : '';
+  $('simDualWrap').style.display = isDual ? '' : 'none';
+  if (!isDual) return;
+
+  const skip = +$('skipColor').value;
+  const maps = buildDualPassMaps(skip);
+  if (!maps) return;
+  lastDualMaps = maps;
+
+  const ctxP1 = setupPreviewCanvas('simP1');
+  const ctxP2 = setupPreviewCanvas('simP2');
+  const { coarse, diff, coarseSize:C } = maps;
+  let coarseCells = 0, correctionPixels = 0;
+
+  for (let by=0; by<C; by++){
+    for (let bx=0; bx<C; bx++){
+      const pi = coarse[by*C+bx];
+      if (pi < 0 || pi === skip) continue;
+      drawPalettePixel(ctxP1, bx*3, by*3, pi, 3);
+      drawPalettePixel(ctxP2, bx*3, by*3, pi, 3);
+      coarseCells++;
+    }
+  }
+  for (let y=0; y<OUT_SIZE; y++){
+    for (let x=0; x<OUT_SIZE; x++){
+      const pi = diff[y*OUT_SIZE+x];
+      if (pi < 0 || pi === skip) continue;
+      drawPalettePixel(ctxP2, x, y, pi);
+      correctionPixels++;
+    }
+  }
+
+  $('simP1Info').textContent = `${coarseCells} 格 · brush 3`;
+  $('simP2Info').textContent = `+${correctionPixels} px 修正`;
+}
+
+function generateScript(){
+  if (!indexMap){ $('scriptStat').textContent = '请先转换图片'; return; }
+
+  const skip = +$('skipColor').value;
+  const startPos = $('startPos').value;
+  const useLine = $('useLine').checked;
+  const order = $('order').value;
+  const dual = $('dualPass').checked;
+  const SIZE = OUT_SIZE;
+
+  if (!dual){
+    const r = emitScript({ map: indexMap, W: SIZE, H: SIZE, stride: 1, offset: 0, skip, startPos, useLine, order });
+    lastScript = r.script;
+    lastPass1 = ''; lastPass2 = '';
+    $('singleBtns').style.display = '';
+    $('dualBtns').style.display = 'none';
+    if (!r.stats.pixels){ $('scriptStat').textContent = '没有要绘制的像素'; return; }
+    $('scriptStat').textContent =
+      `${r.stats.commands} 命令 · ${r.stats.colors} 色 · ${r.stats.pixels}px · ${r.stats.runs} 段 · 估 ${fmtTime(r.stats.steps*r.stats.msPerStep)}`;
+    return;
+  }
+
+  // ---- Dual pass: brush 3 coarse + brush 1 detail ----
+  const STRIDE = 3, OFFSET = 1;
+  const maps = buildDualPassMaps(skip);
+  const coarse = maps.coarse;
+  const diff = maps.diff;
+  const C = maps.coarseSize;
+  lastDualMaps = maps;
+  const r1 = emitScript({ map: coarse, W: C, H: C, stride: STRIDE, offset: OFFSET, skip, startPos, useLine, order });
+  const r2 = emitScript({ map: diff, W: SIZE, H: SIZE, stride: 1, offset: 0, skip, startPos, useLine, order });
+
+  lastPass1 = r1.script;
+  lastPass2 = r2.script;
+  lastScript = r1.script + '\n# --- pass 2 (brush 1) ---\n' + r2.script;
+  $('singleBtns').style.display = 'none';
+  $('dualBtns').style.display = '';
+
+  $('scriptStat').textContent =
+    `粗 ${r1.stats.commands}行/${r1.stats.pixels}格 · 细 ${r2.stats.commands}行/${r2.stats.pixels}px · 估 ${fmtTime((r1.stats.steps+r2.stats.steps)*r1.stats.msPerStep)}`;
+}
+
+$('genScript').onclick = ()=>{ generateScript(); simulateScript(); };
+$('downloadScript').onclick = ()=>{
+  if (!lastScript){ generateScript(); if (!lastScript) return; }
+  const blob = new Blob([lastScript], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.download = 'tomodachi-script.txt';
+  a.href = url;
+  a.click();
+  URL.revokeObjectURL(url);
+};
+async function copyTextToClipboard(text, btnId, restoreLabel){
+  const btn = $(btnId);
+  const old = btn.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch(e){
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  }
+  btn.textContent = '✓ 已复制';
+  setTimeout(()=>{ btn.textContent = restoreLabel || old; }, 1200);
+}
+function downloadText(text, filename){
+  const blob = new Blob([text], {type:'text/plain'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.download = filename;
+  a.href = url;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+$('copyScript').onclick = ()=>{
+  if (!lastScript){ generateScript(); if (!lastScript) return; }
+  copyTextToClipboard(lastScript, 'copyScript', '📋 复制');
+};
+$('copyP1').onclick = ()=>{
+  if (!lastPass1){ generateScript(); if (!lastPass1) return; }
+  copyTextToClipboard(lastPass1, 'copyP1', '📋 复制');
+};
+$('copyP2').onclick = ()=>{
+  if (!lastPass2){ generateScript(); if (!lastPass2) return; }
+  copyTextToClipboard(lastPass2, 'copyP2', '📋 复制');
+};
+$('dlP1').onclick = ()=>{
+  if (!lastPass1){ generateScript(); if (!lastPass1) return; }
+  downloadText(lastPass1, 'tomodachi-pass1-brush3.txt');
+};
+$('dlP2').onclick = ()=>{
+  if (!lastPass2){ generateScript(); if (!lastPass2) return; }
+  downloadText(lastPass2, 'tomodachi-pass2-brush1.txt');
+};
+$('dualPass').onchange = ()=>{
+  drawDualPassPreview();
+  if (lastScript) simulateScript();
+  $('dualRunBtns').style.display = $('dualPass').checked ? '' : 'none';
+  $('runScript').style.display = $('dualPass').checked ? 'none' : '';
+};
+$('skipColor').onchange = ()=>{
+  lastScript = '';
+  lastPass1 = '';
+  lastPass2 = '';
+  lastDualMaps = null;
+  drawDualPassPreview();
+};
+
+// ---------- Online execution (connects to the Friend Maker server) ----------
+async function refreshPorts(){
+  try {
+    const r = await fetch('/api/ports');
+    const data = await r.json();
+    const sel = $('portSel');
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (!data.ports?.length){
+      const opt = document.createElement('option');
+      opt.value = ''; opt.textContent = '(没有检测到串口)';
+      sel.appendChild(opt);
+      return;
+    }
+    for (const p of data.ports){
+      const opt = document.createElement('option');
+      opt.value = p.path;
+      opt.textContent = p.manufacturer ? `${p.path} — ${p.manufacturer}` : p.path;
+      sel.appendChild(opt);
+    }
+    if (prev && [...sel.options].some(o=>o.value===prev)) sel.value = prev;
+  } catch(e){
+    $('execStat').textContent = '无法读取串口列表：' + e.message;
+  }
+}
+
+let pollTimer = null;
+let lastTotal = 0;
+let execClock = {
+  active: false,
+  elapsedMs: 0,
+  runningSince: null,
+  avgMsPerCommand: null,
+  lastDone: 0,
+  lastSampleElapsedMs: 0,
+  lastTotal: 0,
+};
+
+function fmtDuration(ms){
+  if (!Number.isFinite(ms) || ms < 0) return '--';
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+function resetExecClock(){
+  execClock = {
+    active: true,
+    elapsedMs: 0,
+    runningSince: performance.now(),
+    avgMsPerCommand: null,
+    lastDone: 0,
+    lastSampleElapsedMs: 0,
+    lastTotal,
+  };
+  updateExecTimer(0, lastTotal, 'running');
+}
+
+function pauseExecClock(){
+  if (execClock.runningSince !== null){
+    execClock.elapsedMs += performance.now() - execClock.runningSince;
+    execClock.runningSince = null;
+  }
+}
+
+function resumeExecClock(){
+  if (execClock.runningSince === null){
+    execClock.runningSince = performance.now();
+  }
+  execClock.active = true;
+}
+
+function elapsedExecMs(){
+  if (execClock.runningSince === null) return execClock.elapsedMs;
+  return execClock.elapsedMs + performance.now() - execClock.runningSince;
+}
+
+function syncExecClock(status, done, total){
+  const running = status === 'running';
+  const paused = status === 'paused';
+  const active = running || paused || status === 'stopping';
+
+  if (running){
+    resumeExecClock();
+  } else {
+    pauseExecClock();
+  }
+
+  if (!active && execClock.active){
+    execClock.active = false;
+  } else if (active) {
+    execClock.active = true;
+  }
+
+  calibrateExecClock(done, total, running);
+  updateExecTimer(done, total, status);
+}
+
+function calibrateExecClock(done, total, running){
+  if (total > 0) execClock.lastTotal = total;
+  if (!running){
+    execClock.lastDone = done;
+    execClock.lastSampleElapsedMs = elapsedExecMs();
+    return;
+  }
+
+  const elapsed = elapsedExecMs();
+  const deltaDone = done - execClock.lastDone;
+  const deltaMs = elapsed - execClock.lastSampleElapsedMs;
+  if (deltaDone > 0 && deltaMs > 0){
+    const sampleMsPerCommand = deltaMs / deltaDone;
+    execClock.avgMsPerCommand = execClock.avgMsPerCommand === null
+      ? sampleMsPerCommand
+      : (execClock.avgMsPerCommand * 0.65) + (sampleMsPerCommand * 0.35);
+    execClock.lastDone = done;
+    execClock.lastSampleElapsedMs = elapsed;
+  } else if (done < execClock.lastDone || total !== execClock.lastTotal) {
+    execClock.lastDone = done;
+    execClock.lastSampleElapsedMs = elapsed;
+    execClock.lastTotal = total;
+  }
+}
+
+function updateExecTimer(done, total, status){
+  const elapsed = elapsedExecMs();
+  if (!execClock.active && total === 0 && elapsed === 0){
+    $('execTimer').textContent = '';
+    return;
+  }
+  let remainingText = '--';
+  const remainingCommands = Math.max(0, total - done);
+  if (remainingCommands > 0){
+    const calibratedMs = execClock.avgMsPerCommand !== null
+      ? execClock.avgMsPerCommand * remainingCommands
+      : (done > 0 ? (elapsed / done) * remainingCommands : Infinity);
+    remainingText = fmtDuration(calibratedMs);
+  } else if (total > 0 && done >= total) {
+    remainingText = '0:00';
+  }
+  const paused = status === 'paused' ? ' · 已暂停' : '';
+  $('execTimer').textContent = `已执行 ${fmtDuration(elapsed)} · 预计剩余 ${remainingText}${paused}`;
+}
+
+async function startExec(commands){
+  const port = $('portSel').value;
+  if (!port){ $('execStat').textContent = '请先选择串口'; return; }
+  if (!commands || !commands.length){ $('execStat').textContent = '没有命令可执行'; return; }
+  try {
+    const r = await fetch('/api/execution/start', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ commands, target: 'serial', portPath: port }),
+    });
+    if (!r.ok){
+      const txt = await r.text();
+      $('execStat').textContent = '启动失败：' + txt;
+      return;
+    }
+    lastTotal = commands.length;
+    resetExecClock();
+    if (pollTimer){ clearTimeout(pollTimer); pollTimer = null; }
+    pollExec();
+  } catch(e){
+    $('execStat').textContent = '请求失败：' + e.message;
+  }
+}
+
+async function pollExec(){
+  try {
+    const r = await fetch('/api/execution/status');
+    const data = await r.json();
+    const ex = data.execution || data;
+    const status = ex.status || 'idle';
+    const total = ex.totalCommands || lastTotal || 0;
+    const done = ex.completedCommands || 0;
+    const pct = total > 0 ? Math.min(100, (done/total)*100) : 0;
+    $('execBar').style.width = pct.toFixed(1) + '%';
+    const cur = ex.currentCommand ? ` · ${ex.currentCommand}` : '';
+    $('execStat').textContent = `${status} · ${done}/${total}${cur}${ex.error?` · ❌ ${ex.error}`:''}`;
+    syncExecClock(status, done, total);
+
+    const running = status === 'running';
+    const paused = status === 'paused';
+    const active = running || paused || status === 'stopping';
+    $('pauseExec').disabled = !running;
+    $('resumeExec').disabled = !paused;
+    $('stopExec').disabled = !active;
+    $('runScript').disabled = active;
+    $('runP1').disabled = active;
+    $('runP2').disabled = active;
+
+    if (active){
+      pollTimer = setTimeout(pollExec, 500);
+    } else {
+      pollTimer = null;
+    }
+  } catch(e){
+    $('execStat').textContent = '状态查询失败：' + e.message;
+  }
+}
+
+function scriptToCommands(text){
+  return text.split(/\r?\n/).map(s=>s.trim()).filter(s=>s && !s.startsWith('#'));
+}
+
+$('refreshPorts').onclick = refreshPorts;
+$('runScript').onclick = ()=>{
+  if (!lastScript){ generateScript(); }
+  startExec(scriptToCommands(lastScript));
+};
+$('runP1').onclick = ()=>{
+  if (!lastPass1){ generateScript(); }
+  startExec(scriptToCommands(lastPass1));
+};
+$('runP2').onclick = ()=>{
+  if (!lastPass2){ generateScript(); }
+  startExec(scriptToCommands(lastPass2));
+};
+$('pauseExec').onclick = async ()=>{
+  await fetch('/api/execution/pause', {method:'POST'});
+  pauseExecClock();
+  updateExecTimer(execClock.lastDone, lastTotal, 'paused');
+  pollExec();
+};
+$('resumeExec').onclick = async ()=>{
+  await fetch('/api/execution/resume', {method:'POST'});
+  resumeExecClock();
+  pollExec();
+};
+$('stopExec').onclick = async ()=>{
+  await fetch('/api/execution/stop', {method:'POST'});
+  pauseExecClock();
+  pollExec();
+};
+
+// Auto-load ports on first open
+refreshPorts();
+pollExec();
+
+// ---------- Tab switching ----------
+document.querySelectorAll('.tab').forEach(btn=>{
+  btn.onclick = ()=>{
+    const target = btn.dataset.tab;
+    document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active', b===btn));
+    document.querySelectorAll('[data-tab-pane]').forEach(p=>{
+      p.hidden = p.dataset.tabPane !== target;
+    });
+    if (target === 'legacy'){
+      const f = $('legacyFrame');
+      if (f.src === 'about:blank' || !f.src.endsWith('/')){
+        f.src = '/';
+      }
+    }
+  };
+});
+
+// ---------- Speed select ----------
+$('speed').addEventListener('change', ()=>{
+  $('speedCustom').style.display = $('speed').value === 'custom' ? '' : 'none';
+});
+
+// ---------- Script simulator (replay onto a canvas) ----------
+function runScriptOnCtx(ctx, script, SIZE, brushSize){
+  const halfB = (brushSize - 1) >> 1;
+  const slots = new Array(9).fill(0);
+  let curSlot = 0;
+  let cx = SIZE >> 1, cy = SIZE >> 1; // game opens with cursor at center each time
+  let drawn = 0, off = 0;
+
+  const stamp = (x, y, pi)=>{
+    const c = PALETTE[pi] || [255,255,255];
+    ctx.fillStyle = `rgb(${c[0]},${c[1]},${c[2]})`;
+    let any = false;
+    for (let dy=0; dy<brushSize; dy++){
+      for (let dx=0; dx<brushSize; dx++){
+        const xx = x - halfB + dx, yy = y - halfB + dy;
+        if (xx<0||yy<0||xx>=SIZE||yy>=SIZE){ off++; continue; }
+        ctx.fillRect(xx, yy, 1, 1);
+        any = true;
+      }
+    }
+    if (any) drawn++;
+  };
+
+  for (const raw of script.split('\n')){
+    const ln = raw.trim();
+    if (!ln || ln.startsWith('#')) continue;
+    const parts = ln.split(/\s+/);
+    const op = parts[0];
+    if (op === 'M'){ cx += +parts[1]; cy += +parts[2]; }
+    else if (op === 'L'){
+      const dx = +parts[1], dy = +parts[2];
+      const steps = Math.abs(dx) + Math.abs(dy);
+      const sx = Math.sign(dx), sy = Math.sign(dy);
+      const pi = slots[curSlot] ?? 0;
+      stamp(cx, cy, pi);
+      for (let i=0; i<steps; i++){ cx += sx; cy += sy; stamp(cx, cy, pi); }
+    }
+    else if (op === 'P'){ stamp(cx, cy, slots[curSlot] ?? 0); }
+    else if (op === 'C'){ curSlot = +parts[1]; }
+    else if (op === 'BC' && parts[1] !== 'RESET'){
+      slots[+parts[1]] = (+parts[2])*12 + (+parts[3]);
+    }
+  }
+  return { drawn, off };
+}
+
+function simulateScript(){
+  if (!lastScript) return;
+  const SIZE = OUT_SIZE;
+  const z = +$('zoom').value;
+  const isDual = $('dualPass').checked && lastPass1 && lastPass2;
+
+  $('simSingleWrap').style.display = isDual ? 'none' : '';
+  $('simDualWrap').style.display = isDual ? '' : 'none';
+
+  const setupCanvas = (id)=>{
+    const c = $(id);
+    c.width = SIZE; c.height = SIZE;
+    const ctx = c.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+    c.style.width = (SIZE*z)+'px';
+    c.style.height = (SIZE*z)+'px';
+    c.style.maxWidth = '100%';
+    return ctx;
+  };
+
+  if (isDual){
+    // Pass 1 alone on the left canvas
+    const ctxP1 = setupCanvas('simP1');
+    const r1 = runScriptOnCtx(ctxP1, lastPass1, SIZE, 3);
+    // Pass 2 on top of pass 1 result (right canvas: copy pass1 then run pass2)
+    const ctxP2 = setupCanvas('simP2');
+    ctxP2.drawImage($('simP1'), 0, 0);
+    const r2 = runScriptOnCtx(ctxP2, lastPass2, SIZE, 1);
+    $('simP1Info').textContent = `${r1.drawn} 笔${r1.off?` · ${r1.off} 越界`:''}`;
+    $('simP2Info').textContent = `+${r2.drawn} 笔修正${r2.off?` · ${r2.off} 越界`:''}`;
+  } else {
+    const ctx = setupCanvas('sim');
+    const r = runScriptOnCtx(ctx, lastScript, SIZE, 1);
+    $('simInfo').textContent = `${r.drawn} 笔${r.off?` · ${r.off} 越界`:''}`;
+  }
+}
+
+function addErr(buf, x, y, eR, eG, eB, w, pw){
+  const j = (y*pw+x)*3;
+  buf[j] += eR*w;
+  buf[j+1] += eG*w;
+  buf[j+2] += eB*w;
+}
+
+// Wire up live-update sliders
+const liveIds = ['ditherAmt','bright','cont','sat','zoom'];
+const fmt = {ditherAmt:v=>v+'%', bright:v=>v, cont:v=>v, sat:v=>v, zoom:v=>v+'×'};
+const lblMap = {ditherAmt:'ditherAmtV',bright:'brightV',cont:'contV',sat:'satV',zoom:'zoomV'};
+
+let processTimer = null;
+function schedule(){
+  clearTimeout(processTimer);
+  processTimer = setTimeout(process, 80);
+}
+
+liveIds.forEach(id=>{
+  $(id).addEventListener('input',()=>{
+    $(lblMap[id]).textContent = fmt[id]($(id).value);
+    if (id !== 'zoom') schedule();
+  });
+});
+
+// Zoom slider only updates display; no need to re-quantize
+$('zoom').addEventListener('input',()=>{
+  if (!outCanvas.width) return;
+  const z = +$('zoom').value;
+  outCanvas.style.width = (OUT_SIZE*z)+'px';
+  outCanvas.style.height = (OUT_SIZE*z)+'px';
+  ['sim','simP1','simP2'].forEach(id=>{
+    const c = $(id);
+    if (!c.width) return;
+    c.style.width = (OUT_SIZE*z)+'px';
+    c.style.height = (OUT_SIZE*z)+'px';
+  });
+});
+
+$('process').onclick = process;
+$('dither').onchange = process;
+$('distance').onchange = process;
+$('fit').onchange = process;
+
+$('download').onclick = ()=>{
+  if (!outCanvas.width) return;
+  const a = document.createElement('a');
+  a.download = 'tomodachi-palette.png';
+  a.href = outCanvas.toDataURL('image/png');
+  a.click();
+};
+</script>
+</body>
+</html>
