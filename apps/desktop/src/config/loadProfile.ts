@@ -13,6 +13,7 @@ const VALID_DRAWING_TOOLS = new Set<DrawingProfile["startTool"]>([
   "shape",
 ]);
 const VALID_BRUSH_SIZES = new Set<DrawingProfile["brushSize"]>([1, 3, 7, 13, 19, 27]);
+const VALID_BRUSH_SHAPES = new Set<DrawingProfile["brushShape"]>(["round", "square"]);
 
 function toNumber(value: unknown, fallback: number): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -36,6 +37,12 @@ function toNonNegativeNumber(value: unknown, fallback: number): number {
 function toBrushSize(value: unknown, fallback: DrawingProfile["brushSize"]): DrawingProfile["brushSize"] {
   return typeof value === "number" && VALID_BRUSH_SIZES.has(value as DrawingProfile["brushSize"])
     ? (value as DrawingProfile["brushSize"])
+    : fallback;
+}
+
+function toBrushShape(value: unknown, fallback: DrawingProfile["brushShape"]): DrawingProfile["brushShape"] {
+  return typeof value === "string" && VALID_BRUSH_SHAPES.has(value as DrawingProfile["brushShape"])
+    ? (value as DrawingProfile["brushShape"])
     : fallback;
 }
 
@@ -76,6 +83,7 @@ export async function loadProfile(profilePath?: string): Promise<DrawingProfile>
     monoThreshold: toNumber(parsed.monoThreshold, DEFAULT_PROFILE.monoThreshold),
     palette,
     brushSize: toBrushSize(parsed.brushSize, DEFAULT_PROFILE.brushSize),
+    brushShape: toBrushShape(parsed.brushShape, DEFAULT_PROFILE.brushShape),
     startCursor: parsed.startCursor === "top-left" ? "top-left" : "center",
     startTool: toTool(parsed.startTool, DEFAULT_PROFILE.startTool),
     startColorIndex: toNonNegativeNumber(parsed.startColorIndex, DEFAULT_PROFILE.startColorIndex),

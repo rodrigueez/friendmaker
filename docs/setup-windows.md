@@ -186,6 +186,6 @@ http://127.0.0.1:4307
 
 Before drawing:
 
-1. make sure the Switch brush size matches the web UI brush size
-2. make sure the cursor/brush is parked at the canvas center
+1. make sure the cursor is parked at the canvas center
+2. let the script switch brush size and shape automatically from the default canvas state
 3. if you use `官方色绘制`, keep the 9 palette slots at the game's default colors

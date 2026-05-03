@@ -24,7 +24,7 @@ import {
   type SerialSessionSnapshot,
 } from "../serial/sender.js";
 import { SimulatedAckSender } from "../simulator/sender.js";
-import type { ColorDistanceMode, DitherMode, SenderControls } from "../types.js";
+import type { BrushShape, ColorDistanceMode, DitherMode, SenderControls } from "../types.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -116,6 +116,7 @@ const FIRMWARE_ENVIRONMENTS = [
 
 type FirmwareEnvironmentId = (typeof FIRMWARE_ENVIRONMENTS)[number]["id"];
 const VALID_BRUSH_SIZES = new Set([1, 3, 7, 13, 19, 27] as const);
+const VALID_BRUSH_SHAPES = new Set<BrushShape>(["round", "square"]);
 type ExecutionTarget = "simulate" | "serial";
 type ExecutionStatus = "idle" | "running" | "paused" | "stopping" | "completed" | "failed" | "stopped";
 
@@ -350,6 +351,12 @@ function normalizeBrushSize(value: unknown, fallback: 1 | 3 | 7 | 13 | 19 | 27):
     : fallback;
 }
 
+function normalizeBrushShape(value: unknown, fallback: BrushShape): BrushShape {
+  return typeof value === "string" && VALID_BRUSH_SHAPES.has(value as BrushShape)
+    ? (value as BrushShape)
+    : fallback;
+}
+
 function normalizeTimingMs(value: unknown, fallback: number): number {
   if (typeof value !== "number" || !Number.isFinite(value)) {
     return fallback;
@@ -471,6 +478,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     profile?: string;
     size?: number;
     brushSize?: number;
+    brushShape?: BrushShape;
     imageScalePercent?: number;
     imageOffsetXPercent?: number;
     imageOffsetYPercent?: number;
@@ -523,6 +531,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
   const profile = {
     ...baseProfile,
     brushSize: normalizeBrushSize(body.brushSize, baseProfile.brushSize),
+    brushShape: normalizeBrushShape(body.brushShape, baseProfile.brushShape),
     buttonPressDuration: normalizeTimingMs(body.buttonPressMs, baseProfile.buttonPressDuration),
     inputDelay: normalizeTimingMs(body.inputDelayMs, baseProfile.inputDelay),
   };
@@ -555,6 +564,7 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       canvasWidth: profile.canvasWidth,
       canvasHeight: profile.canvasHeight,
       brushSize: profile.brushSize,
+      brushShape: profile.brushShape,
       imageScalePercent,
       imageOffsetXPercent,
       imageOffsetYPercent,

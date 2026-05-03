@@ -1,4 +1,6 @@
-import type { ControllerButton } from "../types.js";
+import type { BrushShape, BrushSize, ControllerButton } from "../types.js";
+
+export type BrushTool = "pen" | "eraser";
 
 export type DrawCommand =
   | { type: "inputConfig"; buttonPressMs: number; inputDelayMs: number; homeMs: number }
@@ -11,6 +13,8 @@ export type DrawCommand =
   | { type: "basicPaletteReset" }
   | { type: "paletteConfig"; slot: number; colorHex: string }
   | { type: "basicPaletteConfig"; slot: number; row: number; col: number }
+  | { type: "setBrush"; size: BrushSize; shape: BrushShape }
+  | { type: "setTool"; tool: BrushTool }
   | { type: "wait"; ms: number }
   | { type: "pause" }
   | { type: "resume" }
@@ -58,6 +62,14 @@ export function paletteConfigCommand(slot: number, colorHex: string): DrawComman
 
 export function basicPaletteConfigCommand(slot: number, row: number, col: number): DrawCommand {
   return { type: "basicPaletteConfig", slot, row, col };
+}
+
+export function setBrushCommand(size: BrushSize, shape: BrushShape): DrawCommand {
+  return { type: "setBrush", size, shape };
+}
+
+export function setToolCommand(tool: BrushTool): DrawCommand {
+  return { type: "setTool", tool };
 }
 
 export function waitCommand(ms: number): DrawCommand {
