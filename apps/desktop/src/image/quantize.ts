@@ -42,7 +42,7 @@ function rgbToLab(color: RgbColor): [number, number, number] {
   return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
 }
 
-function distanceSquared(a: RgbColor, b: RgbColor, mode: ColorDistanceMode): number {
+export function distanceSquared(a: RgbColor, b: RgbColor, mode: ColorDistanceMode): number {
   if (mode === "lab") {
     const [l1, a1, b1] = rgbToLab(a);
     const [l2, a2, b2] = rgbToLab(b);

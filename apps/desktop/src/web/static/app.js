@@ -74,6 +74,8 @@ const state = {
     contrast: 0,
     saturation: 0,
     resizeMode: "contain",
+    mergeSimilarColors: false,
+    mergeThreshold: 40,
     dualPassCommands: {
       pass1: [],
       pass2: [],
@@ -200,6 +202,9 @@ const els = {
   ditherAmountValue: document.getElementById("dither-amount-value"),
   colorDistanceSelect: document.getElementById("color-distance-select"),
   resizeModeSelect: document.getElementById("resize-mode-select"),
+  mergeSimilarCheckbox: document.getElementById("merge-similar-checkbox"),
+  mergeThresholdRange: document.getElementById("merge-threshold-range"),
+  mergeThresholdValue: document.getElementById("merge-threshold-value"),
   brightnessRange: document.getElementById("brightness-range"),
   brightnessValue: document.getElementById("brightness-value"),
   contrastRange: document.getElementById("contrast-range"),
@@ -487,6 +492,21 @@ els.resizeModeSelect.addEventListener("change", () => {
   state.studio.resizeMode = els.resizeModeSelect.value;
   syncStudioUi();
   scheduleStudioPreviewRefresh();
+});
+
+els.mergeSimilarCheckbox.addEventListener("change", () => {
+  state.studio.mergeSimilarColors = els.mergeSimilarCheckbox.checked;
+  syncStudioUi();
+  scheduleStudioPreviewRefresh();
+});
+
+els.mergeThresholdRange.addEventListener("input", () => {
+  state.studio.mergeThreshold = normalizeStudioNumericValue(els.mergeThresholdRange.value, state.studio.mergeThreshold, {
+    min: 0,
+    max: 100,
+  });
+  syncStudioUi();
+  if (state.studio.mergeSimilarColors) scheduleStudioPreviewRefresh();
 });
 
 els.brightnessRange.addEventListener("input", () => {
@@ -781,6 +801,8 @@ function buildStudioGeneratePayload() {
     brightness: state.studio.brightness,
     contrast: state.studio.contrast,
     saturation: state.studio.saturation,
+    mergeSimilarColors: state.studio.mergeSimilarColors,
+    mergeThreshold: state.studio.mergeThreshold,
   };
 }
 
@@ -834,6 +856,8 @@ function applyGeneratedStudioPayload(payload) {
   state.studio.brightness = payload.profile.brightness ?? state.studio.brightness;
   state.studio.contrast = payload.profile.contrast ?? state.studio.contrast;
   state.studio.saturation = payload.profile.saturation ?? state.studio.saturation;
+  state.studio.mergeSimilarColors = payload.profile.mergeSimilarColors ?? state.studio.mergeSimilarColors;
+  state.studio.mergeThreshold = payload.profile.mergeThreshold ?? state.studio.mergeThreshold;
   state.studio.dualPassCommands = {
     pass1: Array.isArray(payload.dualPass?.pass1Commands) ? payload.dualPass.pass1Commands : [],
     pass2: Array.isArray(payload.dualPass?.pass2Commands) ? payload.dualPass.pass2Commands : [],
@@ -2695,6 +2719,9 @@ function syncStudioUi() {
   els.contrastValue.textContent = String(state.studio.contrast);
   els.saturationRange.value = String(state.studio.saturation);
   els.saturationValue.textContent = String(state.studio.saturation);
+  els.mergeSimilarCheckbox.checked = state.studio.mergeSimilarColors;
+  els.mergeThresholdRange.value = String(state.studio.mergeThreshold);
+  els.mergeThresholdValue.textContent = String(state.studio.mergeThreshold);
   els.autoRemoveBackgroundCheckbox.checked = state.studio.removeBackground;
   syncStudioColorCountOptions();
   const backgroundHint = state.studio.removeBackground
@@ -2734,6 +2761,10 @@ function syncStudioUi() {
   els.brightnessRange.disabled = state.studio.busy || executionActive;
   els.contrastRange.disabled = state.studio.busy || executionActive;
   els.saturationRange.disabled = state.studio.busy || executionActive;
+  els.mergeSimilarCheckbox.disabled =
+    state.studio.busy || executionActive || state.studio.colorMode === "mono";
+  els.mergeThresholdRange.disabled =
+    state.studio.busy || executionActive || state.studio.colorMode === "mono" || !state.studio.mergeSimilarColors;
   els.autoRemoveBackgroundCheckbox.disabled = state.studio.busy || executionActive;
   els.previewGuideSelect.disabled = false;
   els.colorCountSelect.disabled =

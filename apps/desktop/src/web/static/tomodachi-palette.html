@@ -226,6 +226,13 @@
           <button id="palMain">仅主色</button>
         </div>
         <div class="palette-grid" id="palette"></div>
+        <label class="row" style="margin-top:10px;">
+          <input type="checkbox" id="mergeSimilar" style="width:auto;" />
+          <span style="font-weight:600;font-size:13px;">合并同类色</span>
+        </label>
+        <label style="margin-top:4px;">合并阈值 <span id="mergeThreshV">40</span>
+          <input type="range" id="mergeThresh" min="0" max="100" value="40" />
+        </label>
       </details>
 
       <button class="btn" id="process">✨ 开始转换</button>
@@ -428,6 +435,66 @@ function nearestColor(r,g,b, mode, enabledMask){
     }
   }
   return best;
+}
+
+function paletteDistance(i, j, mode){
+  const [r1,g1,b1] = PALETTE[i], [r2,g2,b2] = PALETTE[j];
+  if (mode === 'lab'){
+    const [L1,A1,B1] = LAB_CACHE[i], [L2,A2,B2] = LAB_CACHE[j];
+    return (L1-L2)*(L1-L2)+(A1-A2)*(A1-A2)+(B1-B2)*(B1-B2);
+  }
+  if (mode === 'weighted'){
+    const rm = (r1+r2)/2, dr=r1-r2, dg=g1-g2, db=b1-b2;
+    return (((512+rm)*dr*dr)>>8) + 4*dg*dg + (((767-rm)*db*db)>>8);
+  }
+  const dr=r1-r2, dg=g1-g2, db=b1-b2;
+  return dr*dr+dg*dg+db*db;
+}
+
+function mergeSimilarColors(mode, tolerance){
+  // Determine threshold based on mode and tolerance (0-100)
+  let threshold;
+  if (mode === 'lab') threshold = tolerance * 4;        // 0-400
+  else if (mode === 'weighted') threshold = tolerance * 30; // 0-3000
+  else threshold = tolerance * 100;                      // 0-10000
+  if (threshold <= 0) return;
+
+  // Count used colors
+  const counts = new Map();
+  for (let i = 0; i < indexMap.length; i++){
+    const pi = indexMap[i];
+    if (pi >= 0) counts.set(pi, (counts.get(pi)||0)+1);
+  }
+  if (counts.size <= 1) return;
+
+  const used = [...counts.entries()].sort((a,b)=>b[1]-a[1]);
+  const mergeTo = new Map(); // pi → representative
+
+  for (const [pi] of used){
+    if (mergeTo.has(pi)) continue;
+    let rep = pi, repN = counts.get(pi);
+    // Find the highest-frequency color within threshold of pi
+    for (const [pj] of used){
+      if (pj === pi || mergeTo.has(pj)) continue;
+      if (paletteDistance(pi, pj, mode) < threshold){
+        const n = counts.get(pj);
+        if (n > repN){ rep = pj; repN = n; }
+      }
+    }
+    // Merge all similar colors into rep
+    for (const [pj] of used){
+      if (pj === rep || mergeTo.has(pj)) continue;
+      if (paletteDistance(rep, pj, mode) < threshold){
+        mergeTo.set(pj, rep);
+      }
+    }
+  }
+
+  // Apply merges to indexMap
+  for (let i = 0; i < indexMap.length; i++){
+    const pi = indexMap[i];
+    if (mergeTo.has(pi)) indexMap[i] = mergeTo.get(pi);
+  }
 }
 
 // ---------- DOM ----------
@@ -644,6 +711,16 @@ function process(){
           if (y+2<ph)   addErr(buf, x,  y+2, eR,eG,eB, w8, pw);
         }
       }
+    }
+  }
+
+  // Merge similar colors if enabled
+  if ($('mergeSimilar').checked){
+    mergeSimilarColors(mode, +$('mergeThresh').value);
+    // Update image data to match merged palette
+    for (let i = 0, j = 0; i < data.length; i += 4, j++){
+      const c = PALETTE[indexMap[j]];
+      data[i] = c[0]; data[i+1] = c[1]; data[i+2] = c[2];
     }
   }
 
@@ -1108,6 +1185,10 @@ $('skipColor').onchange = ()=>{
   lastDualMaps = null;
   drawDualPassPreview();
 };
+$('mergeSimilar').onchange = ()=>{ process(); };
+$('mergeThresh').addEventListener('input',()=>{
+  if ($('mergeSimilar').checked) schedule();
+});
 
 // ---------- Online execution (connects to the Friend Maker server) ----------
 async function refreshPorts(){
@@ -1465,9 +1546,9 @@ function addErr(buf, x, y, eR, eG, eB, w, pw){
 }
 
 // Wire up live-update sliders
-const liveIds = ['ditherAmt','bright','cont','sat','zoom'];
-const fmt = {ditherAmt:v=>v+'%', bright:v=>v, cont:v=>v, sat:v=>v, zoom:v=>v+'×'};
-const lblMap = {ditherAmt:'ditherAmtV',bright:'brightV',cont:'contV',sat:'satV',zoom:'zoomV'};
+const liveIds = ['ditherAmt','bright','cont','sat','zoom','mergeThresh'];
+const fmt = {ditherAmt:v=>v+'%', bright:v=>v, cont:v=>v, sat:v=>v, zoom:v=>v+'×', mergeThresh:v=>v};
+const lblMap = {ditherAmt:'ditherAmtV',bright:'brightV',cont:'contV',sat:'satV',zoom:'zoomV',mergeThresh:'mergeThreshV'};
 
 let processTimer = null;
 function schedule(){

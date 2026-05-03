@@ -483,6 +483,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     brightness?: number;
     contrast?: number;
     saturation?: number;
+    mergeSimilarColors?: boolean;
+    mergeThreshold?: number;
   };
 
   if (!body.imageDataUrl) {
@@ -527,6 +529,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
     ditherMode: normalizeDitherMode(body.ditherMode),
     ditherAmount: normalizeDitherAmount(body.ditherAmount),
     colorDistanceMode: normalizeColorDistanceMode(body.colorDistanceMode),
+    mergeSimilarColors: body.mergeSimilarColors === true,
+    mergeThreshold: Number(body.mergeThreshold ?? 40),
   };
   const imageSource = decodeDataUrl(body.imageDataUrl);
   const useDualPass = body.dualPass === true && profile.colorMode === "official";
@@ -561,6 +565,8 @@ async function handleGenerate(request: IncomingMessage, response: ServerResponse
       brightness: generationOptions.brightness,
       contrast: generationOptions.contrast,
       saturation: generationOptions.saturation,
+      mergeSimilarColors: generationOptions.mergeSimilarColors,
+      mergeThreshold: generationOptions.mergeThreshold,
     },
     stats: {
       usedColorIndexes: plan.usedColorIndexes,

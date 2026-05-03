@@ -3,7 +3,8 @@ import { createBrushGrid } from "../brushGrid.js";
 import type { ImageSource } from "./loadImage.js";
 import { autoRemoveBackground } from "./removeBackground.js";
 import { resizeImage } from "./resizeImage.js";
-import { quantizePixels } from "./quantize.js";
+import { distanceSquared, quantizePixels } from "./quantize.js";
+import { parseHexColor } from "../utils/colors.js";
 
 function collapsePixelMapForBrush(
   pixelMap: PixelizationResult["pixelMap"],
@@ -117,6 +118,75 @@ function collapsePixelMapForBrush(
   return collapsed;
 }
 
+function mergeSimilarColorsInMap(
+  pixelMap: PixelizationResult["pixelMap"],
+  usedColorIndexes: number[],
+  paletteHexes: string[],
+  distanceMode: ColorDistanceMode,
+  tolerance: number,
+): number[] {
+  let threshold: number;
+  if (distanceMode === "lab") threshold = tolerance * 4;
+  else if (distanceMode === "weighted") threshold = tolerance * 30;
+  else threshold = tolerance * 100;
+  if (threshold <= 0 || usedColorIndexes.length <= 1) return usedColorIndexes;
+
+  const counts = new Map<number, number>();
+  for (const row of pixelMap) {
+    for (const pixel of row) {
+      if (pixel.colorIndex >= 0) {
+        counts.set(pixel.colorIndex, (counts.get(pixel.colorIndex) || 0) + 1);
+      }
+    }
+  }
+
+  const paletteRgb = paletteHexes.map(parseHexColor);
+  const used = usedColorIndexes
+    .filter((ci) => counts.has(ci))
+    .sort((a, b) => (counts.get(b) || 0) - (counts.get(a) || 0));
+
+  const mergeTo = new Map<number, number>();
+
+  for (const ci of used) {
+    if (mergeTo.has(ci)) continue;
+    let rep = ci;
+    let repN = counts.get(ci) || 0;
+    for (const cj of used) {
+      if (cj === ci || mergeTo.has(cj)) continue;
+      const a = paletteRgb[ci], b = paletteRgb[cj];
+      if (a && b && distanceSquared(a, b, distanceMode) < threshold) {
+        const n = counts.get(cj) || 0;
+        if (n > repN) { rep = cj; repN = n; }
+      }
+    }
+    for (const cj of used) {
+      if (cj === rep || mergeTo.has(cj)) continue;
+      const a = paletteRgb[rep], b = paletteRgb[cj];
+      if (a && b && distanceSquared(a, b, distanceMode) < threshold) {
+        mergeTo.set(cj, rep);
+      }
+    }
+  }
+
+  for (const row of pixelMap) {
+    for (const pixel of row) {
+      const mapped = mergeTo.get(pixel.colorIndex);
+      if (mapped !== undefined) {
+        pixel.colorIndex = mapped;
+        pixel.colorHex = paletteHexes[mapped] || pixel.colorHex;
+      }
+    }
+  }
+
+  return Array.from(
+    new Set(
+      pixelMap.flatMap((row) =>
+        row.filter((pixel) => pixel.alpha > 0).map((pixel) => pixel.colorIndex),
+      ),
+    ),
+  ).sort((a, b) => a - b);
+}
+
 export async function pixelizeImage(
   imageSource: ImageSource,
   profile: DrawingProfile,
@@ -131,6 +201,8 @@ export async function pixelizeImage(
     ditherMode?: DitherMode;
     ditherAmount?: number;
     colorDistanceMode?: ColorDistanceMode;
+    mergeSimilarColors?: boolean;
+    mergeThreshold?: number;
   },
 ): Promise<PixelizationResult> {
   const resizeOptions = {
@@ -168,13 +240,23 @@ export async function pixelizeImage(
   });
   const pixelMap = collapsePixelMapForBrush(fullPixelMap, profile);
 
-  const usedColorIndexes = Array.from(
+  let usedColorIndexes = Array.from(
     new Set(
       pixelMap.flatMap((row) =>
         row.filter((pixel) => pixel.alpha > 0).map((pixel) => pixel.colorIndex),
       ),
     ),
   ).sort((a, b) => a - b);
+
+  if (options?.mergeSimilarColors) {
+    usedColorIndexes = mergeSimilarColorsInMap(
+      pixelMap,
+      usedColorIndexes,
+      profile.palette,
+      options?.colorDistanceMode ?? "weighted",
+      options?.mergeThreshold ?? 40,
+    );
+  }
 
   return {
     pixelMap,

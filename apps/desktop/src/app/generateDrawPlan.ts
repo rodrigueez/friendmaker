@@ -56,6 +56,8 @@ export async function generateDrawPlan(
     ditherMode?: DitherMode;
     ditherAmount?: number;
     colorDistanceMode?: ColorDistanceMode;
+    mergeSimilarColors?: boolean;
+    mergeThreshold?: number;
   },
 ): Promise<DrawPlan> {
   const { pixelMap, usedColorIndexes } = await pixelizeImage(imageSource, profile, options);
@@ -181,6 +183,8 @@ export async function generateDualPassDrawPlan(
     ditherMode?: DitherMode;
     ditherAmount?: number;
     colorDistanceMode?: ColorDistanceMode;
+    mergeSimilarColors?: boolean;
+    mergeThreshold?: number;
   },
 ): Promise<DualPassDrawPlan> {
   const coarseProfile = cloneProfileWithBrushSize(profile, 3);

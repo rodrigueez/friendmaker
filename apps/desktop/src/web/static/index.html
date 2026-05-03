@@ -228,7 +228,21 @@
                   <option value="stretch">stretch</option>
                 </select>
               </label>
+
+              <label class="checkbox-card" for="merge-similar-checkbox">
+                <input id="merge-similar-checkbox" type="checkbox" />
+                <span class="checkbox-copy">
+                  <strong>合并同类色</strong>
+                  <small>将官方色盘中颜色相近的色块合并，减少换色次数以缩短绘制时间。</small>
+                </span>
+              </label>
             </div>
+
+            <label class="range-row">
+              <span>合并阈值</span>
+              <input id="merge-threshold-range" type="range" min="0" max="100" step="1" value="40" />
+              <strong id="merge-threshold-value">40</strong>
+            </label>
 
             <div id="speed-custom-row" class="field-grid studio-settings-grid hidden">
               <label>
