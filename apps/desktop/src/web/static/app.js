@@ -104,6 +104,7 @@ const state = {
       elapsedMs: 0,
       runningSince: null,
       avgMsPerCommand: null,
+      estimatedRemainingMs: null,
       lastDone: 0,
       lastSampleElapsedMs: 0,
     },
@@ -127,6 +128,7 @@ const state = {
       elapsedMs: 0,
       runningSince: null,
       avgMsPerCommand: null,
+      estimatedRemainingMs: null,
       lastDone: 0,
       lastSampleElapsedMs: 0,
     },
@@ -1727,6 +1729,53 @@ function formatStudioClock(ms) {
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
+const ETA_RECENT_SAMPLE_WEIGHT = 0.12;
+const ETA_RECENT_BLEND_WEIGHT = 0.2;
+const ETA_MIN_COMPLETED_FOR_RECENT = 8;
+const ETA_MIN_SAMPLE_MULTIPLIER = 0.4;
+const ETA_MAX_SAMPLE_MULTIPLIER = 2.5;
+const ETA_MAX_STEP_DOWN_RATIO = 0.75;
+const ETA_MAX_STEP_UP_RATIO = 1.25;
+
+function estimateRemainingMs(execution, clock, elapsed) {
+  const remainingCommands = Math.max(0, execution.totalCommands - execution.completedCommands);
+
+  if (remainingCommands === 0) {
+    clock.estimatedRemainingMs = 0;
+    return 0;
+  }
+
+  if (execution.completedCommands <= 0 || elapsed <= 0) {
+    clock.estimatedRemainingMs = null;
+    return null;
+  }
+
+  const cumulativeMsPerCommand = elapsed / execution.completedCommands;
+  const hasEnoughSamples = execution.completedCommands >= ETA_MIN_COMPLETED_FOR_RECENT;
+  const recentMsPerCommand =
+    hasEnoughSamples && clock.avgMsPerCommand !== null
+      ? clampNumber(
+          clock.avgMsPerCommand,
+          cumulativeMsPerCommand * ETA_MIN_SAMPLE_MULTIPLIER,
+          cumulativeMsPerCommand * ETA_MAX_SAMPLE_MULTIPLIER,
+        )
+      : cumulativeMsPerCommand;
+  const blendedMsPerCommand =
+    cumulativeMsPerCommand * (1 - ETA_RECENT_BLEND_WEIGHT) +
+    recentMsPerCommand * ETA_RECENT_BLEND_WEIGHT;
+  const rawRemainingMs = blendedMsPerCommand * remainingCommands;
+
+  if (clock.estimatedRemainingMs === null) {
+    clock.estimatedRemainingMs = rawRemainingMs;
+    return rawRemainingMs;
+  }
+
+  const lowerBound = clock.estimatedRemainingMs * ETA_MAX_STEP_DOWN_RATIO;
+  const upperBound = clock.estimatedRemainingMs * ETA_MAX_STEP_UP_RATIO;
+  clock.estimatedRemainingMs = clampNumber(rawRemainingMs, lowerBound, upperBound);
+  return clock.estimatedRemainingMs;
+}
+
 function pauseStudioExecutionClock() {
   const clock = state.studio.executionClock;
 
@@ -1763,6 +1812,7 @@ function syncStudioExecutionClock(execution, isNewExecution) {
       elapsedMs: 0,
       runningSince: execution.status === "running" ? performance.now() : null,
       avgMsPerCommand: null,
+      estimatedRemainingMs: null,
       lastDone: execution.completedCommands,
       lastSampleElapsedMs: 0,
     };
@@ -1781,10 +1831,17 @@ function syncStudioExecutionClock(execution, isNewExecution) {
 
   if (execution.status === "running" && deltaDone > 0 && deltaMs > 0) {
     const sampleMsPerCommand = deltaMs / deltaDone;
+    const cumulativeMsPerCommand = elapsed / execution.completedCommands;
+    const clampedSampleMsPerCommand = clampNumber(
+      sampleMsPerCommand,
+      cumulativeMsPerCommand * ETA_MIN_SAMPLE_MULTIPLIER,
+      cumulativeMsPerCommand * ETA_MAX_SAMPLE_MULTIPLIER,
+    );
     clock.avgMsPerCommand =
       clock.avgMsPerCommand === null
-        ? sampleMsPerCommand
-        : clock.avgMsPerCommand * 0.65 + sampleMsPerCommand * 0.35;
+        ? clampedSampleMsPerCommand
+        : clock.avgMsPerCommand * (1 - ETA_RECENT_SAMPLE_WEIGHT) +
+          clampedSampleMsPerCommand * ETA_RECENT_SAMPLE_WEIGHT;
     clock.lastDone = execution.completedCommands;
     clock.lastSampleElapsedMs = elapsed;
   } else if (execution.completedCommands < clock.lastDone) {
@@ -1801,16 +1858,9 @@ function getStudioExecutionTimerLabel() {
   }
 
   const elapsed = getStudioExecutionElapsedMs();
-  const remainingCommands = Math.max(0, execution.totalCommands - execution.completedCommands);
-  let remaining = "--";
-
-  if (remainingCommands === 0) {
-    remaining = "0:00";
-  } else if (state.studio.executionClock.avgMsPerCommand !== null) {
-    remaining = formatStudioClock(state.studio.executionClock.avgMsPerCommand * remainingCommands);
-  } else if (execution.completedCommands > 0) {
-    remaining = formatStudioClock((elapsed / execution.completedCommands) * remainingCommands);
-  }
+  const remaining = formatStudioClock(
+    estimateRemainingMs(state.studio.execution, state.studio.executionClock, elapsed),
+  );
 
   return ` · 已执行 ${formatStudioClock(elapsed)} · 预计剩余 ${remaining}`;
 }
@@ -1965,6 +2015,7 @@ function syncCustomExecutionClock(execution, isNewExecution) {
       elapsedMs: 0,
       runningSince: execution.status === "running" ? performance.now() : null,
       avgMsPerCommand: null,
+      estimatedRemainingMs: null,
       lastDone: execution.completedCommands,
       lastSampleElapsedMs: 0,
     };
@@ -1983,10 +2034,17 @@ function syncCustomExecutionClock(execution, isNewExecution) {
 
   if (execution.status === "running" && deltaDone > 0 && deltaMs > 0) {
     const sampleMsPerCommand = deltaMs / deltaDone;
+    const cumulativeMsPerCommand = elapsed / execution.completedCommands;
+    const clampedSampleMsPerCommand = clampNumber(
+      sampleMsPerCommand,
+      cumulativeMsPerCommand * ETA_MIN_SAMPLE_MULTIPLIER,
+      cumulativeMsPerCommand * ETA_MAX_SAMPLE_MULTIPLIER,
+    );
     clock.avgMsPerCommand =
       clock.avgMsPerCommand === null
-        ? sampleMsPerCommand
-        : clock.avgMsPerCommand * 0.65 + sampleMsPerCommand * 0.35;
+        ? clampedSampleMsPerCommand
+        : clock.avgMsPerCommand * (1 - ETA_RECENT_SAMPLE_WEIGHT) +
+          clampedSampleMsPerCommand * ETA_RECENT_SAMPLE_WEIGHT;
     clock.lastDone = execution.completedCommands;
     clock.lastSampleElapsedMs = elapsed;
   } else if (execution.completedCommands < clock.lastDone) {
@@ -2002,16 +2060,9 @@ function getCustomExecutionTimerLabel() {
   }
 
   const elapsed = getCustomExecutionElapsedMs();
-  const remainingCommands = Math.max(0, execution.totalCommands - execution.completedCommands);
-  let remaining = "--";
-
-  if (remainingCommands === 0) {
-    remaining = "0:00";
-  } else if (state.custom.executionClock.avgMsPerCommand !== null) {
-    remaining = formatStudioClock(state.custom.executionClock.avgMsPerCommand * remainingCommands);
-  } else if (execution.completedCommands > 0) {
-    remaining = formatStudioClock((elapsed / execution.completedCommands) * remainingCommands);
-  }
+  const remaining = formatStudioClock(
+    estimateRemainingMs(state.custom.execution, state.custom.executionClock, elapsed),
+  );
 
   return ` · 已执行 ${formatStudioClock(elapsed)} · 预计剩余 ${remaining}`;
 }
